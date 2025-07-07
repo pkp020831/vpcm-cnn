@@ -28,3 +28,9 @@ test-full: ## Run all tests
 
 train: ## Train the model
 	python src/train.py
+
+install: ## Install dependencies with uv
+	uv sync
+
+install-dev: ## Install development dependencies
+	uv sync --extra dev
