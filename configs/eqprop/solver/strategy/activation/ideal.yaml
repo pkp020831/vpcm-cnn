@@ -1,0 +1,4 @@
+# @package model.net.solver.strategy.activation
+_target_: src.core.eqprop.activation.IdealRectifier
+Vl: 0.1
+Vr: 0.9

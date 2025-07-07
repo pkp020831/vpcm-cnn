@@ -1,0 +1,6 @@
+# @package model.net
+# Base template for SimpleDenseNet architectures
+_target_: src.models.components.simple_dense_net.SimpleDenseNet
+cfg: ${net_architecture}
+bias: ${net_bias:true}
+batch_norm: ${net_batch_norm:false}

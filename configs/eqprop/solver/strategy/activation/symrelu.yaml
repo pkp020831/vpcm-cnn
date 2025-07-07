@@ -1,0 +1,5 @@
+# @package model.net.solver.strategy.activation
+_target_: src.core.eqprop.activation.SymReLU
+Vl: -0.6
+Vr: 0.6
+Vth: 1.0

@@ -1,0 +1,8 @@
+name: ml-ep
+
+channels:
+  - defaults
+  - conda-forge
+
+dependencies:
+  - qpsolvers

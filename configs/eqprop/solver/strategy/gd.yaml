@@ -1,0 +1,7 @@
+# @package model.net.solver.strategy
+_target_: src.core.eqprop.strategy.GradientDescentStrategy
+alpha: 1
+amp_factor: ${model.net.solver.amp_factor}
+max_iter: 50
+atol: 1e-6
+activation: ???

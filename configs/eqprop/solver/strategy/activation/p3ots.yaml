@@ -1,0 +1,6 @@
+# @package model.net.solver.strategy.activation
+_target_: src.core.eqprop.activation.P3OTS
+Is: 1e-6
+Vth: 0.02
+Vl: -0.5
+Vr: 0.5

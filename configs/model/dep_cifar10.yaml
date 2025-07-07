@@ -1,0 +1,18 @@
+# @package model
+_target_: src._eqprop.EqPropLitModule
+compile: false
+
+defaults:
+  - optimizer: sgd
+  - net: eqprop_cifar10_direct
+
+param_adjuster:
+  _target_: src.utils.eqprop_utils.AdjustParams
+  L: 1e-7
+  U: null
+  clamp: true
+  normalize: false
+
+scheduler: null
+gaussian_std: null
+noise_type: additive

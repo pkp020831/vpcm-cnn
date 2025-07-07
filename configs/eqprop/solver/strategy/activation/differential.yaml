@@ -1,0 +1,6 @@
+# @package model.net.solver.strategy.activation
+# Differential pair activation for resistive networks
+# Matches energy-based-learning differential pair implementation
+_target_: src.core.eqprop.activation.DifferentialPairRectifier
+Is: 1.0
+Vth: 1.0

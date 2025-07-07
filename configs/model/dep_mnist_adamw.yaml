@@ -1,0 +1,4 @@
+# @package model
+defaults:
+  - dep_mnist
+  - override optimizer: adamw

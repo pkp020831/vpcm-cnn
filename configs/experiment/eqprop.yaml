@@ -1,0 +1,27 @@
+# @package _global_
+defaults:
+  - override /model: dep_mnist
+  - override /callbacks: eqprop_track
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["mnist", "eqprop", "c-ep"]
+
+seed: 12345
+
+trainer:
+  min_epochs: 10
+  max_epochs: 10
+
+data:
+  batch_size: 64
+
+model:
+  net:
+    bias: true
+
+logger:
+  wandb:
+    tags: ${tags}
+    group: "mnist"

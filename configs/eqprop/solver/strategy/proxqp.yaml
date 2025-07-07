@@ -1,0 +1,7 @@
+# @package model.net.solver.strategy
+defaults:
+  - activation: ideal
+_target_: src.core.eqprop.strategy.ProxQPStrategy
+amp_factor: ${model.net.solver.amp_factor}
+add_nonlin_last: false
+num_threads: null

@@ -1,0 +1,5 @@
+# @package model.net
+defaults:
+  - ep_mnist
+  - _self_
+_target_: src._eqprop.EqPropSequentialBackbone

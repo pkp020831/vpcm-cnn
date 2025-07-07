@@ -1,3 +1,4 @@
+import shutil
 import warnings
 from importlib.util import find_spec
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -117,3 +118,24 @@ def get_metric_value(metric_dict: Dict[str, Any], metric_name: Optional[str]) ->
     log.info(f"Retrieved metric value! <{metric_name}={metric_value}>")
 
     return metric_value
+
+
+def package_available(package_name: str) -> bool:
+    """Check if a package is available in your environment. Duplicate of
+    `tests/helpers/package_available.py`.
+
+    :param package_name: The name of the package to be checked.
+
+    :return: `True` if the package is available. `False` otherwise.
+    """
+    spec = find_spec(package_name)
+    return spec is not None
+
+
+def lib_available(lib_name: str) -> bool:
+    """Check if a library is available in your environment."""
+    result = shutil.which(lib_name)
+    if result:
+        return True
+    else:
+        return False

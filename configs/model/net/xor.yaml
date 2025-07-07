@@ -1,0 +1,5 @@
+# @package model.net
+_target_: src.models.components.simple_dense_net.SimpleDenseNet
+cfg: [2, 10, 1]
+batch_norm: false
+bias: false

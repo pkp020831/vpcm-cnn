@@ -1,0 +1,42 @@
+_target_: src._eqprop.EqPropLitModule
+compile: false
+
+optimizer:
+  _target_: torch.optim.SGD
+  _partial_: true
+  lr: 0.1
+  weight_decay: 0.0
+
+net:
+  _target_: src._eqprop.EqPropBackbone
+  beta: 0.1
+  bias: false
+  scale_input: 2
+  scale_output: 2
+  cfg:
+    - 1568  # 784 * 2
+    - 128
+    - 20    # 10 * 2
+  solver:
+    _target_: src.core.eqprop.solvers.AnalogEqPropSolver
+    amp_factor: 1.0
+    beta: 0.1
+    strategy:
+      _target_: src.core.eqprop.strategy.strategies.ProxQPStrategy
+      activation:
+        _target_: src.core.eqprop.activation.IdealRectifier
+        Vl: 0.1
+        Vr: 0.9
+      amp_factor: 1.0
+      add_nonlin_last: false
+      num_threads: null
+  param_adjuster:
+    _target_: src.utils.eqprop_utils.AdjustParams
+    L: 1e-7
+    U: null
+    clamp: true
+    normalize: false
+
+scheduler: null
+gaussian_std: null
+noise_type: additive

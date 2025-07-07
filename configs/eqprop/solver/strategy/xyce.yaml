@@ -1,0 +1,10 @@
+# @package model.net.solver.strategy
+_target_: src.core.eqprop.strategy.XyceStrategy
+SPICE_params:
+  A: "${model.net.solver.amp_factor}"
+  beta: "${model.net.beta}"
+  Diode:
+    "Path": "./src/core/spice/1N4148.lib"
+    "ModelName": "1N4148" # or OTS for OTS device
+    "Rectifier": "BidRectifier" # or SymReLU, etc. check src/core/spice/subcircuits.py
+  "noise": 0

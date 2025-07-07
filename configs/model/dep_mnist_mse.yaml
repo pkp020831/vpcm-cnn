@@ -1,0 +1,5 @@
+# @package model
+defaults:
+  - dep_mnist
+
+_target_: src._eqprop.EqPropMSELitModule

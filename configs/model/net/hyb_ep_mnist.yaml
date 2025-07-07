@@ -1,0 +1,27 @@
+# @package model.net
+_target_: src._eqprop.HybridEqPropBackbone
+cfg:
+  - ${eval:'int(784*${model.net.scale_input})'}
+  - 128
+  - ${eval:'int(10*${model.net.scale_output})'}
+bias: false
+beta: 0.1
+scale_input: 2
+scale_output: 2
+
+solver:
+  _target_: src.core.eqprop.solvers.AnalogEqPropSolver
+  amp_factor: 1.0
+  beta: ${..beta}
+  strategy:
+    _target_: src.core.eqprop.strategy.ProxQPStrategy
+    amp_factor: ${...solver.amp_factor}
+    add_nonlin_last: false
+    num_threads: null
+    activation:
+      _target_: src.core.eqprop.activation.IdealRectifier
+      Vl: 0.1
+      Vr: 0.9
+
+param_adjuster:
+  _target_: src.utils.eqprop_utils.AdjustParams
