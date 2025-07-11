@@ -66,7 +66,9 @@ class EqPropBackbone(nn.Module):
         for idx in range(len(cfg) - 1):
             bias_idx = bias if isinstance(bias, bool) else bias[idx]
             solver_ = deepcopy(solver) if solver else None
-            layers.append(enn.EqPropLinear(cfg[idx], cfg[idx + 1], bias=bias_idx, solver=solver_))
+            layers.append(
+                enn.EqPropLinear(cfg[idx], cfg[idx + 1], bias=bias_idx, solver=solver_)
+            )
             # layers.append(nn.Tanh())
             layers.append(MultiplyActivation(scale=layer_scale))
         return layers
@@ -116,7 +118,7 @@ class EqPropSequentialBackbone(nn.Module):
         for idx in range(len(cfg) - 1):
             bias_idx = bias if isinstance(bias, bool) else bias[idx]
             layers.append(
-                nn.Linear(
+                enn.EqPropLinear(
                     cfg[idx],
                     cfg[idx + 1],
                     bias=bias_idx,
@@ -145,7 +147,9 @@ class HybridEqPropBackbone(EqPropBackbone):
                 [
                     nn.Linear(cfg[idx], cfg[idx], bias=bias_idx),
                     nn.ReLU(),
-                    enn.EqPropLinear(cfg[idx], cfg[idx + 1], bias=bias_idx, solver=solver_),
+                    enn.EqPropLinear(
+                        cfg[idx], cfg[idx + 1], bias=bias_idx, solver=solver_
+                    ),
                     MultiplyActivation(scale=layer_scale),
                 ]
             )
@@ -200,7 +204,9 @@ class GroupedHybridBackbone(EqPropBackbone):
         overall_layers_list: list[nn.Module] = []
 
         cfg_type_idx = 0  # self.cfg_types 리스트를 순회하는 인덱스
-        while cfg_type_idx < len(self.cfg_types):  # self.cfg_types 사용 (생성자에서 설정됨)
+        while cfg_type_idx < len(
+            self.cfg_types
+        ):  # self.cfg_types 사용 (생성자에서 설정됨)
             current_block_type = self.cfg_types[cfg_type_idx]
             block_start_cfg_type_idx = cfg_type_idx
 
@@ -225,11 +231,15 @@ class GroupedHybridBackbone(EqPropBackbone):
 
                 if current_block_type == "EP":
                     internal_block_sub_layers.append(
-                        nn.Linear(layer_input_dim, layer_output_dim, bias=current_layer_bias)
+                        nn.Linear(
+                            layer_input_dim, layer_output_dim, bias=current_layer_bias
+                        )
                     )
                 elif current_block_type == "BP":
                     internal_block_sub_layers.append(
-                        nn.Linear(layer_input_dim, layer_output_dim, bias=current_layer_bias)
+                        nn.Linear(
+                            layer_input_dim, layer_output_dim, bias=current_layer_bias
+                        )
                     )
                     internal_block_sub_layers.append(nn.ReLU())
 
