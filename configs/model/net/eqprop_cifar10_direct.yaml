@@ -1,8 +1,0 @@
-# @package model.net
-defaults:
-  - direct_backbone_config
-
-cfg:
-  - ${eval:'1024*${model.net.scale_input}'}
-  - 512
-  - ${eval:'10*${model.net.scale_output}'}
