@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 
 if TYPE_CHECKING:
-    from src.core.eqprop.nn.module import EqPropSequential
+    from src.core.eqprop.nn.module import EqPropSequential, _EqPropMixin
 
 
 class PositiveEqPropFunc(torch.autograd.Function):
@@ -45,7 +45,9 @@ class PositiveEqPropFunc(torch.autograd.Function):
         else:
             nodes = (positive_nodes[0], negative_nodes[0])
             eqprop_layer.calc_n_set_param_grad_(input, nodes)
-            grad_input = eqprop_layer.calc_x_grad(nodes)  # dL/dx = g*(dV_nudge -dV_free)/beta
+            grad_input = eqprop_layer.calc_x_grad(
+                nodes
+            )  # dL/dx = g*(dV_nudge -dV_free)/beta
         return None, grad_input
 
 
@@ -83,9 +85,7 @@ class CenteredEqPropFunc(PositiveEqPropFunc):
         """Backward pass for centered EqProp."""
         (input,) = ctx.saved_tensors
         eqprop_layer = ctx.eqprop_layer
-        grad_output /= (
-            2  # we need to divide by 2 to get the equivalent perturbation with the same magnitude
-        )
+        grad_output /= 2  # we need to divide by 2 to get the equivalent perturbation with the same magnitude
         eqprop_layer.solver.flip_beta()
         positive_nodes = eqprop_layer.solver(input, grad=grad_output)
         eqprop_layer.solver.flip_beta()

@@ -6,12 +6,15 @@ from typing import Literal
 import torch
 import torch.nn as nn
 
-from src.core.eqprop.solvers import EqPropSolver
-from src.core.eqprop.functions import PositiveEqPropFunc, AlteredEqPropFunc, CenteredEqPropFunc
+from src.core.eqprop.solvers import EqPropSolver, EqPropSolverManager
+from src.core.eqprop.functions import (
+    PositiveEqPropFunc,
+    AlteredEqPropFunc,
+    CenteredEqPropFunc,
+)
 from src.utils import eqprop_utils, RankedLogger
 
 __all__ = [
-    "EqPropSolverManager",
     "EqPropLinear",
     "EqPropConv2d",
     "EqPropSequential",
@@ -22,97 +25,6 @@ __all__ = [
 ]
 
 log = RankedLogger(__name__)
-
-
-class EqPropSolverManager:
-    """Manager for EqProp solver and layer registration.
-
-    This class manages the registration of EqProp layers and automatically
-    configures the solver when needed. Uses the Adapter pattern to present
-    registered layers to the solver as a virtual container.
-    """
-
-    def __init__(self, solver: EqPropSolver):
-        """Initialize with a solver instance.
-
-        Args:
-            solver: EqProp solver to manage
-        """
-        self._solver = solver
-        self._registered_layers: list[_EqPropMixin] = []
-        self._is_configured = False
-
-    def register_layer(self, layer: _EqPropMixin) -> None:
-        """Register a layer with the manager.
-
-        Args:
-            layer: EqProp layer to register
-        """
-        if layer not in self._registered_layers:
-            self._registered_layers.append(layer)
-            self._is_configured = False
-            log.debug(f"Registered layer {type(layer).__name__} with SolverManager")
-
-    def unregister_layer(self, layer: _EqPropMixin) -> None:
-        """Unregister a layer from the manager.
-
-        Args:
-            layer: EqProp layer to unregister
-        """
-        if layer in self._registered_layers:
-            self._registered_layers.remove(layer)
-            self._is_configured = False
-            log.debug(f"Unregistered layer {type(layer).__name__} from SolverManager")
-
-    def configure_solver(self) -> None:
-        """Configure the solver with all registered layers.
-
-        Creates a virtual container that adapts the registered layers
-        to the interface expected by solver.set_model().
-        """
-        if not self._is_configured and self._registered_layers:
-            virtual_container = self._create_virtual_container()
-            self._solver.set_model(virtual_container)
-            self._is_configured = True
-            log.debug(f"Configured solver with {len(self._registered_layers)} layers")
-
-    def get_solver(self) -> EqPropSolver:
-        """Get the configured solver.
-
-        Automatically configures the solver if not already done (lazy configuration).
-
-        Returns:
-            Configured EqProp solver
-        """
-        if not self._is_configured:
-            self.configure_solver()
-        return self._solver
-
-    def _create_virtual_container(self):
-        """Create a virtual container for solver.set_model().
-
-        This adapter allows the SolverManager to present its registered
-        layers as a container that matches the interface expected by
-        the solver's set_model method.
-
-        Returns:
-            Virtual container object with IS_CONTAINER and _eq_layers
-        """
-        registered_layers = self._registered_layers
-
-        class VirtualContainer:
-            IS_CONTAINER = True
-
-            @property
-            def _eq_layers(self):
-                return registered_layers
-
-            def named_parameters(self):
-                """Yield parameters from all registered layers."""
-                for layer in registered_layers:
-                    yield from layer.named_parameters()
-
-        return VirtualContainer()
 
 
 class _EqPropMixin(ABC):
@@ -200,7 +112,9 @@ class _EqPropMixin(ABC):
         elif self._direct_solver is not None:
             return self._direct_solver
         else:
-            raise RuntimeError(f"No SolverManager or direct solver set for {type(self).__name__}")
+            raise RuntimeError(
+                f"No SolverManager or direct solver set for {type(self).__name__}"
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for EqProp."""
@@ -264,7 +178,9 @@ class EqPropLinear(_EqPropMixin, nn.Linear):
             solver: Optional direct solver (alternative to solver_manager)
             param_init_args: Arguments for positive parameter initialization
         """
-        nn.Linear.__init__(self, in_features, out_features, bias=bias, device=device, dtype=dtype)
+        nn.Linear.__init__(
+            self, in_features, out_features, bias=bias, device=device, dtype=dtype
+        )
         _EqPropMixin.__init__(self, eqprop_fn, solver_manager, solver)
         self.apply(eqprop_utils.positive_param_init(**param_init_args))
 
@@ -341,28 +257,38 @@ class EqPropLinear(_EqPropMixin, nn.Linear):
                 - torch.bmm(negative_node.unsqueeze(2), x.unsqueeze(1)).mean(0)
             )
             # x.pow(2) - x.pow(2) = 0, so skip prev_nodes^2 terms
-            dw += (negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)).unsqueeze(1)
+            dw += (
+                negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)
+            ).unsqueeze(1)
         else:
             # Subsequent layers: full computation with different prev_positive and prev_negative
             prev_positive, prev_negative = prev_nodes
             # Weight gradient
             dw = 2 * (
-                torch.bmm(positive_node.unsqueeze(2), prev_positive.unsqueeze(1)).mean(0)
-                - torch.bmm(negative_node.unsqueeze(2), prev_negative.unsqueeze(1)).mean(0)
+                torch.bmm(positive_node.unsqueeze(2), prev_positive.unsqueeze(1)).mean(
+                    0
+                )
+                - torch.bmm(
+                    negative_node.unsqueeze(2), prev_negative.unsqueeze(1)
+                ).mean(0)
             )
             # Add prev_nodes^2 terms (non-zero when prev_positive != prev_negative)
-            dw += (prev_negative.pow(2).mean(0) - prev_positive.pow(2).mean(0)).unsqueeze(0)
+            dw += (
+                prev_negative.pow(2).mean(0) - prev_positive.pow(2).mean(0)
+            ).unsqueeze(0)
             # Add current nodes^2 terms
-            dw += (negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)).unsqueeze(1)
+            dw += (
+                negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)
+            ).unsqueeze(1)
 
         dw /= beta
         self.weight.grad = dw if self.weight.grad is None else self.weight.grad + dw
 
         # Bias gradient (same for both cases)
         if self.bias is not None:
-            db = ((negative_node - positive_node) * (negative_node + positive_node - 2)).mean(
-                0
-            ) / beta
+            db = (
+                (negative_node - positive_node) * (negative_node + positive_node - 2)
+            ).mean(0) / beta
             self.bias.grad = db if self.bias.grad is None else self.bias.grad + db
 
     @torch.no_grad()
@@ -499,19 +425,29 @@ class EqPropConv2d(_EqPropMixin, nn.LazyConv2d):
                 - torch.bmm(negative_node.unsqueeze(2), x.unsqueeze(1)).mean(0)
             )
             # x.pow(2) - x.pow(2) = 0, so skip prev_nodes^2 terms
-            dw += (negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)).unsqueeze(1)
+            dw += (
+                negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)
+            ).unsqueeze(1)
         else:
             # Subsequent layers: full computation with different prev_positive and prev_negative
             prev_positive, prev_negative = prev_nodes
             # Weight gradient
             dw = 2 * (
-                torch.bmm(positive_node.unsqueeze(2), prev_positive.unsqueeze(1)).mean(0)
-                - torch.bmm(negative_node.unsqueeze(2), prev_negative.unsqueeze(1)).mean(0)
+                torch.bmm(positive_node.unsqueeze(2), prev_positive.unsqueeze(1)).mean(
+                    0
+                )
+                - torch.bmm(
+                    negative_node.unsqueeze(2), prev_negative.unsqueeze(1)
+                ).mean(0)
             )
             # Add prev_nodes^2 terms (non-zero when prev_positive != prev_negative)
-            dw += (prev_negative.pow(2).mean(0) - prev_positive.pow(2).mean(0)).unsqueeze(1)
+            dw += (
+                prev_negative.pow(2).mean(0) - prev_positive.pow(2).mean(0)
+            ).unsqueeze(1)
             # Add current nodes^2 terms
-            dw += (negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)).unsqueeze(1)
+            dw += (
+                negative_node.pow(2).mean(0) - positive_node.pow(2).mean(0)
+            ).unsqueeze(1)
 
         dw /= beta
 
@@ -521,9 +457,9 @@ class EqPropConv2d(_EqPropMixin, nn.LazyConv2d):
 
         # Bias gradient (same for both cases)
         if self.bias is not None:
-            db = ((negative_node - positive_node) * (negative_node + positive_node - 2)).mean(
-                0
-            ) / beta
+            db = (
+                (negative_node - positive_node) * (negative_node + positive_node - 2)
+            ).mean(0) / beta
             self.bias.grad = db if self.bias.grad is None else self.bias.grad + db
 
     @torch.no_grad()

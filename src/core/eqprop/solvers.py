@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 
 from src.core.eqprop.strategy import AbstractStrategy
 from src.utils.pylogger import RankedLogger
+
+if TYPE_CHECKING:
+    from src.core.eqprop.nn.module import _EqPropMixin
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -78,7 +81,9 @@ class EqPropSolver:
                     # Prefer specific weight/bias attributes if known, else iterate named_parameters
                     # This assumes _eq_layers returns the actual nn.Module instances
                     found_weight_for_layer = False
-                    if hasattr(layer, "weight") and isinstance(layer.weight, nn.Parameter):
+                    if hasattr(layer, "weight") and isinstance(
+                        layer.weight, nn.Parameter
+                    ):
                         st.W.append(layer.weight)
                         st.dims.append(layer.weight.shape[0])
                         found_weight_for_layer = True
@@ -102,12 +107,16 @@ class EqPropSolver:
         else:  # Standalone _EqPropMixin layer or other nn.Module
             log.debug(f"Setting model for standalone EqProp layer type: {type(model)}")
             for name, param in model.named_parameters():
-                if name.endswith("weight"):  # Be more specific if layers have multiple 'weights'
+                if name.endswith(
+                    "weight"
+                ):  # Be more specific if layers have multiple 'weights'
                     st.W.append(param)
                     st.dims.append(param.shape[0])
                 elif name.endswith("bias"):
                     st.B.append(param)
-        log.debug(f"Solver strategy configured with {len(st.W)} weights and {len(st.B)} biases.")
+        log.debug(
+            f"Solver strategy configured with {len(st.W)} weights and {len(st.B)} biases."
+        )
 
     def __call__(
         self,
@@ -154,7 +163,9 @@ class EqPropSolver:
             """
             nodes_energy = 0.5 * torch.sum(torch.pow(n, 2), dim=1)
             weights_energy = 0.5 * (torch.matmul(act(m), w.weight) * act(n)).sum(dim=1)
-            biases_energy = torch.matmul(act(m), w.bias) if getattr(w, "bias") is not None else 0.0
+            biases_energy = (
+                torch.matmul(act(m), w.bias) if getattr(w, "bias") is not None else 0.0
+            )
             return nodes_energy - weights_energy - biases_energy
 
         for idx in range(it):
@@ -162,7 +173,9 @@ class EqPropSolver:
                 E = layer_energy(x, self.W[idx], Nodes[idx])
             else:
                 E += layer_energy(Nodes[idx - 1], self.W[idx], Nodes[idx])
-        E += 0.5 * torch.sum(torch.pow(Nodes[-1], 2), dim=1)  # add E_nodes of output layer
+        E += 0.5 * torch.sum(
+            torch.pow(Nodes[-1], 2), dim=1
+        )  # add E_nodes of output layer
         return E
 
     def total_energy(self, Nodes, x, y, beta) -> torch.Tensor:
@@ -222,11 +235,106 @@ class AnalogEqPropSolver(EqPropSolver):
 
         for idx in range(num_layers):
             if idx == 0:
-                E = layer_power(x, self.W[idx], Nodes[idx]) + self.activation.p(Nodes[idx])
+                E = layer_power(x, self.W[idx], Nodes[idx]) + self.activation.p(
+                    Nodes[idx]
+                )
             elif idx != num_layers - 1:
                 E += layer_power(
                     self.amp_factor * (Nodes[idx - 1]), self.W[idx], Nodes[idx]
                 ) + self.activation.p(Nodes[idx])
             else:
-                E += layer_power(self.amp_factor(Nodes[idx - 1]), self.W[idx], Nodes[idx])
+                E += layer_power(
+                    self.amp_factor(Nodes[idx - 1]), self.W[idx], Nodes[idx]
+                )
         return E
+
+
+class EqPropSolverManager:
+    """Manager for EqProp solver and layer registration.
+
+    This class manages the registration of EqProp layers and automatically
+    configures the solver when needed. Uses the Adapter pattern to present
+    registered layers to the solver as a virtual container.
+    """
+
+    def __init__(self, solver: EqPropSolver):
+        """Initialize with a solver instance.
+
+        Args:
+            solver: EqProp solver to manage
+        """
+        self._solver = solver
+        self._registered_layers: list[_EqPropMixin] = []
+        self._is_configured = False
+
+    def register_layer(self, layer: _EqPropMixin) -> None:
+        """Register a layer with the manager.
+
+        Args:
+            layer: EqProp layer to register
+        """
+        if layer not in self._registered_layers:
+            self._registered_layers.append(layer)
+            self._is_configured = False
+            log.debug(f"Registered layer {type(layer).__name__} with SolverManager")
+
+    def unregister_layer(self, layer: _EqPropMixin) -> None:
+        """Unregister a layer from the manager.
+
+        Args:
+            layer: EqProp layer to unregister
+        """
+        if layer in self._registered_layers:
+            self._registered_layers.remove(layer)
+            self._is_configured = False
+            log.debug(f"Unregistered layer {type(layer).__name__} from SolverManager")
+
+    def configure_solver(self) -> None:
+        """Configure the solver with all registered layers.
+
+        Creates a virtual container that adapts the registered layers
+        to the interface expected by solver.set_model().
+        """
+        if not self._is_configured and self._registered_layers:
+            virtual_container = self._create_virtual_container()
+            self._solver.set_model(virtual_container)
+            self._is_configured = True
+            log.debug(f"Configured solver with {len(self._registered_layers)} layers")
+
+    def get_solver(self) -> EqPropSolver:
+        """Get the configured solver.
+
+        Automatically configures the solver if not already done (lazy configuration).
+
+        Returns:
+            Configured EqProp solver
+        """
+        if not self._is_configured:
+            self.configure_solver()
+        return self._solver
+
+    def _create_virtual_container(self):
+        """Create a virtual container for solver.set_model().
+
+        This adapter allows the SolverManager to present its registered
+        layers as a container that matches the interface expected by
+        the solver's set_model method.
+
+        Returns:
+            Virtual container object with IS_CONTAINER and _eq_layers
+        """
+        registered_layers = self._registered_layers
+
+        class VirtualContainer:
+            IS_CONTAINER = True
+
+            @property
+            def _eq_layers(self):
+                return registered_layers
+
+            def named_parameters(self):
+                """Yield parameters from all registered layers."""
+                for layer in registered_layers:
+                    yield from layer.named_parameters()
+
+        return VirtualContainer()
