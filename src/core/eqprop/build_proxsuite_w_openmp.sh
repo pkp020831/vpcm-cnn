@@ -102,7 +102,7 @@ install_python_deps() {
     case $env_type in
         "conda")
             echo "Installing Python dependencies via conda..."
-            conda install cmake eigen simde -y
+            conda install -c conda-forge cmake eigen simde -y
             ;;
         "venv"|"global")
             echo "Installing Python dependencies via pip..."
@@ -158,7 +158,7 @@ main() {
     mkdir -p "$install_prefix"
 
     # Install dependencies
-    install_system_deps "$env_type"
+    # install_system_deps "$env_type"
     install_python_deps "$env_type"
 
     # Clone and build ProxSuite

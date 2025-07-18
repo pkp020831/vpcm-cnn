@@ -721,6 +721,23 @@ class ProxQPStrategy(FirstOrderStrategy):
     def __del__(self):
         """Destructor to ensure proper cleanup of QP problems."""
         self._cleanup_qps()
+    
+    # Gemini에 의해 추가
+    def __getstate__(self):
+        # Copy the object's state
+        state = self.__dict__.copy()
+        # Remove the unpicklable 'qps' attribute
+        if 'qps' in state:
+            del state['qps']
+        return state
+
+    # Gemini에 의해 추가
+    def __setstate__(self, state):
+        # Restore the object's state
+        self.__dict__.update(state)
+        # Re-initialize 'qps' to None, it will be created when needed
+        self.qps = None
+        self._qp_initialized = False
 
     def _cleanup_qps(self) -> None:
         """Internal method to properly clean up QP problems."""

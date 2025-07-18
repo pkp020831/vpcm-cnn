@@ -2,7 +2,7 @@
 
 # example hyperparameter optimization of some experiment with Optuna:
 # python train.py -m hparams_search=mnist_optuna experiment=example
-
+# python src/train.py model/net=ep_mnist hparams_search=mnist_optuna trainer=gpu
 defaults:
   - override /hydra/sweeper: optuna
 
@@ -33,7 +33,7 @@ hydra:
     direction: maximize
 
     # total number of runs that will be executed
-    n_trials: 20
+    n_trials: 40
 
     # choose Optuna hyperparameter sampler
     # you can choose bayesian sampler (tpe), random search (without optimization), grid sampler, and others
@@ -45,8 +45,24 @@ hydra:
 
     # define hyperparameter search space
     params:
-      model.optimizer.lr: interval(0.0001, 0.1)
-      data.batch_size: choice(32, 64, 128, 256)
-      model.net.lin1_size: choice(64, 128, 256)
-      model.net.lin2_size: choice(64, 128, 256)
-      model.net.lin3_size: choice(32, 64, 128, 256)
+      #eqprop
+      # EqProp-specific parameters
+      model.net.beta: tag(log,interval(0.5, 2))
+      model.net.solver.amp_factor: tag(log,interval(4, 8))
+      model.optimizer.lr: tag(log,interval(0.0005, 0.002))
+      data.batch_size: choice(64,128)
+      # General model/data parameters
+      
+      # Network hidden layer size
+      #model.net.cfg[1]: choice(64, 128, 256)
+
+
+
+
+      # * 초기 설정
+      #model.optimizer.lr: interval(0.0001, 0.1)
+      
+      #model.net.beta: interval(0.1,1)
+      #model.net.lin1_size: choice(64, 128, 256)
+      #model.net.lin2_size: choice(64, 128, 256)
+      #model.net.lin3_size: choice(32, 64, 128, 256)

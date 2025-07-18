@@ -111,12 +111,15 @@ class EP(nn.Module):
         **kwargs,
     ) -> list[torch.Tensor]:
         """Minimize the total energy function using torch.autograd."""
+        # 1. 최적화할 뉴런(Nodes)과 반복 횟수(iters) 설정
         Nodes = self._Nodes if Nodes is None else Nodes
         iters = self.free_iters if iters is None else iters
-        self.W.requires_grad_(False)  # freeze weights
+        self.W.requires_grad_(False)  # 2. freeze weights
+        # 3. 지정된 횟수만큼 에너지 최소화 단계를 반복
         for _ in range(iters):
             # print(Nodes)
             self.step(Nodes, x, y, beta)
+        # 4. 최적화된 뉴런 상태를 복사하여 반환
         relaxedNodes1 = [nodes.clone().detach() for nodes in Nodes]
         return relaxedNodes1
 
@@ -129,14 +132,18 @@ class EP(nn.Module):
             y (_type_, optional): _description_. Defaults to None.
             beta (float, optional): _description_. Defaults to 0.0.
         """
-        # compute grads(dE/du)
+        # compute grads(dE/du) # 현재 뉴런 상태(Nodes)에서의 총 에너지(E)를 계산
         E, __ = self.Tenergy(Nodes, x, y, beta=beta)
         # update Nodes
         grads = torch.autograd.grad(E.sum(), Nodes)
+        # 계산된 그래디언트 사용, Nodes 업데이트
         with torch.no_grad():
             for idx, layergrads in enumerate(grads):
+                # 3a. 경사 하강법 업데이트
                 Nodes[idx] -= self.eps * layergrads
+                # 3b. 뉴런 활성화 값의 범위를 [0,1]로 제한
                 Nodes[idx] = torch.clamp(Nodes[idx], 0, 1)
+                # 3c. 다음 스텝을 위해 그래디언트 추적 다시 활성화
                 Nodes[idx].requires_grad_(True)
 
     # TODO: make net._Nodes gradient zero after step
@@ -149,16 +156,23 @@ class EP(nn.Module):
             y (_type_, optional): _description_. Defaults to None.
             beta (float, optional): _description_. Defaults to 0.0.
         """
+        # 1. 현재 뉴런 상태에서의 총에너지(E)를 계산합니다. (step 함수와 동일)
         E, _ = self.Tenergy(Nodes, x, y, beta)
+        # 2. autograd.backward(0)를 호출하여 그래디언트를 계산하고 저장합니다.(핵심 차이점 1)
         E.sum().backward()
+        # 3. 계산된 그래디언트를 사용하여 뉴런 상태(Nodes)를 업데이트합니다.
         with torch.no_grad():
             for idx, nodes in enumerate(Nodes):
+                # 3a. .grad 속성에 저장된 그래디언트를 사용 (핵심 차이점 2)
                 nodes -= self.eps * nodes.grad
+                # 3b. 뉴런 활성화 값 범위 [0,1]로 제한
                 nodes = torch.clamp(nodes, 0, 1)
+                # 3c. 그래디언트 추적을 다시 활성화
                 nodes.requires_grad_(True)
+                # 3d. 사용한 그래디언트를 초기화 (핵심 차이점 3)
                 nodes.grad = None  # ...?
 
-    def energy(self, Nodes: list[torch.Tensor], x) -> torch.Tensor:
+    def energy(self, Nodes: list[torch.Tensor], x) -> torch.Tensor: 
         """Energy function."""
         it = len(Nodes)
         act = self.activation
@@ -167,7 +181,7 @@ class EP(nn.Module):
         )
         assert it == len(self.W), ValueError("number of nodes must match the number of layers")
 
-        def layer_energy(n: torch.Tensor, w: nn.Module, m: torch.Tensor):
+        def layer_energy(n: torch.Tensor, w: nn.Module, m: torch.Tensor): # 1. 두 레이어 사이의 에너지
             """Energy function for a layer.
 
             Args:
@@ -178,16 +192,22 @@ class EP(nn.Module):
             Returns:
                 E_layer = E_nodes - E_weights - E_biases
             """
+            # 1-1. 뉴런 자체의 에너지 (Self-energy)
             nodes_energy = 0.5 * torch.sum(torch.pow(n, 2), dim=1)
+            # 1-2. 가중치를 통한 뉴런 간 상호작용 에너지 (Interaction Energy)
             weights_energy = 0.5 * (torch.matmul(act(m), w.weight) * act(n)).sum(dim=1)
+            # 1-3. 편향(bias)에 의한 에너지
             biases_energy = torch.matmul(act(m), w.bias) if getattr(w, "bias") is not None else 0.0
             return nodes_energy - weights_energy - biases_energy
-
+        # 2. 메인 루프 : 총 에너지 계산
         for idx in range(it):
             if idx == 0:
+                # 첫 번째 레이어 : 입력 x와 첫 번째 히든 레이어 Nodes[0] 사이의 에너지
                 E = layer_energy(x, self.W[idx], Nodes[idx])
             else:
+                # 중간 레이어들 : 이전 히든 레이어와 현재 히든 레이어 사이의 에너지
                 E += layer_energy(Nodes[idx - 1], self.W[idx], Nodes[idx])
+        # 마지막 출력 레이어의 자체 에너지를 더해줌
         E += 0.5 * torch.sum(torch.pow(Nodes[-1], 2), dim=1)  # add E_nodes of output layer
         return E
 
@@ -195,22 +215,32 @@ class EP(nn.Module):
         self, Nodes: list[torch.Tensor], x, y=None, beta: float = 0.0, **kwargs
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute Total Free Energy: Wsum rho(u_i)W_{ij}rho(u_j)"""
+        # 1. 먼저, 순수한 물리적 에너지를 계산
         E = self.energy(Nodes, x)
         L = None
+        # 2. 'beta'가 0이 아니면 (즉, Nudge phase이면) 손실 항을 추가
         if beta != 0:
+            # 2a. y(정답 레이블)가 반드시 제공되어야 함을 확인
             assert y is not None, ValueError("y must be provided if beta != 0")
+            # 2b. 출력 뉴런(Nodes[-1])과 정답(y) 사이 손실(L)을 계산
             L = self.loss(Nodes[-1], y)
+            # 2c. 총 에너지 E에 (beta * 손실 L)을 더함
             E += beta * L
+            # 2d. 로깅 등을 위해 손실 값의 평균을 계산하여 준비
             L = L.mean().detach()
         return (E, L)
 
-    @eqprop_utils.interleave(type="in")
-    def loss(self, y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    @eqprop_utils.interleave(type="in") # y -> y+, y- 즉, non-negative 두 개를 이용하여 음수를 표현할 수 있도록 하는 데코레이터
+    def loss(self, y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor: #loss 게산하는 함수
         """Compute loss."""
+        # 1. 손실 함수의 종류를 확인(이름에 'MSE'가 포함되어 있는지)
         if self.criterion.__class__.__name__.find("MSE") != -1:
+            # 2a. MSE 게열일 경우 : 정답 y를 one-hot 벡터로 변환
             y = F.one_hot(y, num_classes=self.num_classes)
+            # 3a. 변환된 y와 에측 y_hat으로 손실 계산, 클래스 차원에 대해 합산
             L = self.criterion(y_hat.float(), y.float()).sum(dim=1).squeeze()
         else:
+            #2b. 다른 손실 함수일 경우 (ex : CrossEntropyLoss) y를 변환 없이 그대로 사용하여 손실 계산
             L = self.criterion(y_hat.float(), y).squeeze()
         return L
 
@@ -230,11 +260,15 @@ class EP(nn.Module):
         """
         # lr = 1e-1
         act = self.activation
+        # 1. 입력 x를 뉴런 리스트의 맨 앞에 추가 (0번째 레이어로 취급)
         free_nodes.insert(0, x)
         nudge_nodes.insert(0, x)
+        # 2. 가중치(W)의 그래디언트를 계산할 준비
         self.W.requires_grad_(True)
         self.W.zero_grad()
+        # 3. 각 레이어의 가중치(W)와 편항(bias)에 대해 그래디언트를 계산하고 설정
         for idx, W in enumerate(self.W):
+            # 3a. 가중치(W)의 그래디언트 계산
             W.weight.grad = (
                 torch.matmul(
                     act(nudge_nodes[idx + 1]).mean(dim=0, keepdim=True).T,
@@ -244,8 +278,10 @@ class EP(nn.Module):
                     act(free_nodes[idx + 1]).mean(dim=0, keepdim=True).T,
                     act(free_nodes[idx]).mean(dim=0, keepdim=True),
                 )
-            ) / (-self.beta)
+            ) / (-self.beta) # 이론상 1/beta인데, 코드에서는 -1/beta. 이는 에너지 정의와 관련될 수 있음. (gemini 왈)
             # consider bias as synaptic weights with u_i = 1
+            
+            # 3b. 편향(bias)의 그래디언트 계산 
             if getattr(W, "bias") is not None:
                 W.bias.grad = (
                     act(nudge_nodes[idx + 1]).mean(dim=0) - act(free_nodes[idx + 1]).mean(dim=0)
@@ -373,8 +409,10 @@ class AnalogEP(EP):
         Returns:
             torch.Tensor: (B x) O x I
         """
-        if len(n.shape) == 2:
+        if len(n.shape) == 2: #배치 처리 (B : 배치 크기, I : 입력 뉴런 수, O : 출력 뉴런 수)
+            # n의 shape : (B, I), m의 shape: (B, O)
             assert n.shape[0] == m.shape[0], ValueError("n and m must have the same batch size")
+            # 1. 입력, 출력 텐서의 n, m을 브로드캐스팅 가능하게 변형
             N = n.clone().unsqueeze(dim=-1).repeat(1, 1, m.shape[-1]).transpose(1, 2)
             M = m.clone().unsqueeze(dim=-1).repeat(1, 1, n.shape[-1])
         elif len(n.shape) == 1:
@@ -382,23 +420,30 @@ class AnalogEP(EP):
             M = m.clone().unsqueeze(dim=-1).repeat(1, n.shape[-1])
         else:
             ValueError("n and m must be 1D or 2D")
+        # 2. 두 텐서 차이를 계산하여 deltaV 행렬을 반환
         return N - M
 
     @torch.no_grad()
     def update(self, free_opt_Vout: list[torch.Tensor], nudge_opt_Vout: list[torch.Tensor], x):
         """Update weights from optimized Node Voltages (free_opt_Vout &
         nudge_opt_Vout)"""
+        # 1. 그래디언트 계산 준비 (자동 미분 비활성화, 기존 그래디언트 초기화)
         self.W.requires_grad_(True)
         self.W.zero_grad()
-        self.fdV.clear()
+        self.fdV.clear() # (로깅용 변수 초기화)
         self.ndV.clear()
+        # 2. 각 레이어(W)를 순회하며 그래디언트 계산
         for idx, W in enumerate(self.W):
+            # 2a. 현재 레이어의 입력 전압을 결정 (첫 레이어는 x, 나머지는 이전 레이어의 출력)
             free_opt_vin = self.activation(free_opt_Vout[idx - 1]) if idx != 0 else x
+            # 2b. deltaV 함수로 자유/유도 단계의 전압 차이(delta V) 행렬을 각각 계산
             fdV = self.deltaV(free_opt_vin, free_opt_Vout[idx])
+            # (로깅을 위해 배치 평균 저장)
             self.fdV.append(fdV.mean(dim=0))
             nudge_opt_vin = self.activation(nudge_opt_Vout[idx - 1]) if idx != 0 else x
             ndV = self.deltaV(nudge_opt_vin, nudge_opt_Vout[idx])
             self.ndV.append(ndV.mean(dim=0))
+            # 2c. 학습 규칙에 따라 그래디언트를 직접 계산하여 .grad 속성에 할당
             W.weight.grad = (1 / self.beta) * (ndV.pow(2).mean(dim=0) - fdV.pow(2).mean(dim=0))
 
             # TODO: bias?
@@ -620,15 +665,14 @@ class AnalogEP2(nn.Module):
 
 
 class AnalogEPSym(AnalogEP2):
-    """Symmetric version of AnalogEP2.
 
-    Use 3rd nudge phase to compute gradients.
+    #Use 3rd nudge phase to compute gradients.
     """
 
     @eqprop_utils.interleave(type="both")
     @torch.no_grad()
     def forward(self, x):
-        """Forward propagation."""
+        Forward propagation.
         # assert self.training is False
         self.reset_nodes()
         vout = self.solver(x)
@@ -640,7 +684,7 @@ class AnalogEPSym(AnalogEP2):
     @eqprop_utils.interleave(type="in")
     @torch.no_grad()
     def eqprop(self, x: torch.Tensor):
-        """Nudge phases & grad calculation."""
+        Nudge phases & grad calculation.
         vout = self.solver(x, grad=self.ypred.grad)
         self.set_nodes(vout, positive_phase=True)
         self.solver.flip_beta()
@@ -652,7 +696,7 @@ class AnalogEPSym(AnalogEP2):
 
 
 class DummyAnalogEP2(AnalogEP2):
-    """Dummy AnalogEP2 for testing purposes."""
+    Dummy AnalogEP2 for testing purposes.
 
     def __init__(
         self,
@@ -668,3 +712,4 @@ class DummyAnalogEP2(AnalogEP2):
 
     def eqprop(self, x: torch.Tensor):
         pass
+"""

@@ -14,7 +14,7 @@ solver:
   amp_factor: 1.0
   beta: 0.1
   strategy:
-    _target_: src.core.eqprop.strategy.NewtonStrategy
+    _target_: src.core.eqprop.strategy.ResistiveNetworkStrategy  #src.core.eqprop.strategy.NewtonStrategy
     amp_factor: ${...solver.amp_factor}
     activation:
       _target_: src.core.eqprop.activation.OTS

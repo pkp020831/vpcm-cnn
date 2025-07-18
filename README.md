@@ -72,3 +72,8 @@ You can override any parameter from command line like this
 ```bash
 python src/train.py trainer.max_epochs=20 data.batch_size=64
 ```
+
+*EQProp preferred setting*
+python src/train.py model/net=ep_mnist model.net.beta=1 model.net.solver.amp_factor=6.0 model/optimizer=adamw trainer=gpu
+
+python src/train.py -m model/net=ep_mnist hparams_search=mnist_optuna trainer=gpu model/optimizer=adamw
