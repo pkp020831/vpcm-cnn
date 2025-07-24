@@ -1,0 +1,9 @@
+_target_: pytorch_optimizer.LARS
+
+lr: 1
+momentum: 0.9
+weight_decay: 0.0005
+dampening: 0
+nestrov: false
+trust_coefficient: 0.02
+eps: 1e-8

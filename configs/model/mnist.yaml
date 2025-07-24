@@ -5,6 +5,9 @@ defaults:
   - net: mnist
   - optimizer: adam
 
+optimizer:
+  _partial_: true
+
 scheduler:
   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
   _partial_: true
