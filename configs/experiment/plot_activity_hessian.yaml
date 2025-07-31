@@ -1,0 +1,84 @@
+
+# @package _global_
+
+# specify experiment name
+name: "Plot_Activity_Hessian"
+
+defaults:
+  - _self_
+
+data:
+  _target_: src.data.mnist_datamodule.MNISTDataModule
+  data_dir: "data/"
+  batch_size: 64
+  train_val_test_split: [55000, 5000, 10000]
+  num_workers: 0
+  pin_memory: false
+
+model:
+  _target_: src.models.mnist_module.MNISTLitModule
+  compile: false
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.001
+    weight_decay: 0.0
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: "min"
+    factor: 0.1
+    patience: 10
+  net:
+    _target_: src.models.components.simple_dense_net.SimpleDenseNet
+    _allow_new_keys: true
+    input_size: 784
+    output_size: 10
+
+callbacks:
+  model_checkpoint:
+    _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    dirpath: "checkpoints/"
+    filename: "epoch_{epoch:03d}"
+    monitor: "val/acc"
+    mode: "max"
+    save_last: true
+  early_stopping:
+    _target_: lightning.pytorch.callbacks.EarlyStopping
+    monitor: "val/loss"
+    patience: 3
+    mode: "min"
+
+trainer:
+  _target_: lightning.pytorch.Trainer
+  accelerator: "cpu"
+  devices: 1
+  max_epochs: 1
+
+logger:
+  csv:
+    _target_: lightning.pytorch.loggers.csv_logs.CSVLogger
+    save_dir: "."
+    name: "csv/"
+    prefix: ""
+
+seed: 12345
+
+# All parameters below will be stored in `hparams.yaml`
+# and will be tracked by loggers
+
+
+# Analysis-specific parameters
+analysis:
+  solver_strategy:
+    _target_: src.core.eqprop.strategy.strategies.ProxQPStrategy
+    _partial_: true
+    activation:
+      _target_: src.core.eqprop.activation.IdealRectifier
+    num_iterations: 10
+    initialization: "random"
+  solver:
+    _target_: src.core.eqprop.solvers.AnalogEqPropSolver
+    _partial_: true
+    amp_factor: 1.0
+    beta: 0.1

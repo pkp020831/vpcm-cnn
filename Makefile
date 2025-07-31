@@ -26,6 +26,16 @@ test: ## Run not slow tests
 test-full: ## Run all tests
 	pytest
 
+.PHONY: plots
+plots: ## --- Plotting Commands ---
+
+plot-ill-conditioning: plots ## Plot ill-conditioning results
+	python scripts/plot_ill_conditioning.py
+
+plot-hessian-condition: plots ## Plot activity Hessian condition number heatmap
+	python scripts/plot_hessian_condition.py
+
+.PHONY: train
 train: ## Train the model
 	python src/train.py
 

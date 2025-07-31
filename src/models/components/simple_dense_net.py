@@ -8,33 +8,28 @@ class SimpleDenseNet(nn.Module):
     def __init__(
         self,
         input_size: int = 784,
-        lin1_size: int = 256,
-        lin2_size: int = 256,
-        lin3_size: int = 256,
+        hidden_sizes: list[int] = [256, 256, 256],
         output_size: int = 10,
     ) -> None:
         """Initialize a `SimpleDenseNet` module.
 
         :param input_size: The number of input features.
-        :param lin1_size: The number of output features of the first linear layer.
-        :param lin2_size: The number of output features of the second linear layer.
-        :param lin3_size: The number of output features of the third linear layer.
+        :param hidden_sizes: A list of integers, where each integer is the size of a hidden layer.
         :param output_size: The number of output features of the final linear layer.
         """
         super().__init__()
 
-        self.model = nn.Sequential(
-            nn.Linear(input_size, lin1_size),
-            nn.BatchNorm1d(lin1_size),
-            nn.ReLU(),
-            nn.Linear(lin1_size, lin2_size),
-            nn.BatchNorm1d(lin2_size),
-            nn.ReLU(),
-            nn.Linear(lin2_size, lin3_size),
-            nn.BatchNorm1d(lin3_size),
-            nn.ReLU(),
-            nn.Linear(lin3_size, output_size),
-        )
+        layers = []
+        current_size = input_size
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(current_size, hidden_size))
+            layers.append(nn.BatchNorm1d(hidden_size))
+            layers.append(nn.ReLU())
+            current_size = hidden_size
+        
+        layers.append(nn.Linear(current_size, output_size))
+
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a single forward pass through the network.
