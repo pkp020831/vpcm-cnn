@@ -4,5 +4,7 @@ defaults:
 
 cfg:
   - ${eval:'784*${model.net.scale_input}'}
-  - 64
+  - 128
+  - 128
+  - 128
   - ${eval:'10*${model.net.scale_output}'}

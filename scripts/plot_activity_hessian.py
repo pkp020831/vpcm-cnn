@@ -20,7 +20,7 @@ def main(cfg: DictConfig) -> None:
     n_hiddens = list(range(1, 33))
 
     # Initialize a 2D array to store condition numbers
-    condition_numbers = np.zeros((len(n_hiddens), len(widths)))
+    condition_numbers = np.zeros((len(widths), len(n_hiddens)))
 
     # --- Instantiate Data (once) ---
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
@@ -33,10 +33,10 @@ def main(cfg: DictConfig) -> None:
     # Get beta from config
     beta_val = cfg.analysis.solver.beta
 
-    for i, n_hidden in enumerate(n_hiddens):
-        for j, width in enumerate(widths):
+    for i, width in enumerate(widths):
+        for j, n_hidden in enumerate(n_hiddens):
 
-            print(f"\n--- Processing H={n_hidden}, N={width} ---")
+            print(f"\n--- Processing N={width}, H={n_hidden} ---")
 
             # Dynamically create network architecture parameters
             # Now pass hidden_sizes as a list
@@ -135,15 +135,15 @@ def main(cfg: DictConfig) -> None:
         origin="lower",
         aspect="auto",
         norm=mcolors.LogNorm(),
-        extent=[widths[0] - 0.5, widths[-1] + 0.5, n_hiddens[0] - 0.5, n_hiddens[-1] + 0.5]
+        extent=[n_hiddens[0] - 0.5, n_hiddens[-1] + 0.5, widths[0] - 0.5, widths[-1] + 0.5]
     )
     cbar = plt.colorbar(label=r"$\kappa(H_z)$")
     cbar.set_label(label=r"$\kappa(H_z)$", fontsize=20)
-    plt.xlabel("Width (N)", fontsize=20)
-    plt.ylabel("Number of Hidden Layers (H)", fontsize=20)
+    plt.xlabel("Depth (H)", fontsize=20)
+    plt.ylabel("Width (N)", fontsize=20)
     log_ticks = [2**i for i in range(1, 6)] # 2, 4, 8, 16, 32
-    plt.xticks(log_ticks, labels=[f"$2^{{{int(np.log2(w))}}}$" for w in log_ticks])
-    plt.yticks(log_ticks, labels=[f"$2^{{{int(np.log2(h))}}}$" for h in log_ticks])
+    plt.xticks(log_ticks, labels=[f"$2^{{{int(np.log2(h))}}}$" for h in log_ticks])
+    plt.yticks(log_ticks, labels=[f"$2^{{{int(np.log2(w))}}}$" for w in log_ticks])
     plt.tick_params(axis='x', labelsize=20)
     plt.tick_params(axis='y', labelsize=20)
     

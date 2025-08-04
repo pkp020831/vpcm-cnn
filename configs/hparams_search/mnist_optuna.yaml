@@ -33,7 +33,7 @@ hydra:
     direction: maximize
 
     # total number of runs that will be executed
-    n_trials: 50
+    n_trials: 200
 
     # choose Optuna hyperparameter sampler
     # you can choose bayesian sampler (tpe), random search (without optimization), grid sampler, and others
@@ -47,8 +47,8 @@ hydra:
     params:
       #eqprop
       # EqProp-specific parameters
-      model.net.beta: 1 #tag(log,interval(1, 4))
-      model.net.solver.amp_factor: 6 #tag(log,interval(1, 20))
+      model.net.beta: tag(log,interval(1, 10))
+      model.net.solver.amp_factor: tag(log,interval(1, 20))
       model.optimizer.lr: tag(log,interval(0.00001, 0.5))
       data.batch_size: choice(256)
       trainer.min_epochs: 5
