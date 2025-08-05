@@ -86,6 +86,11 @@ def main(cfg: DictConfig) -> None:
                     # Create a config for the specific strategy we are testing
                     strategy_cfg = OmegaConf.create(strategy_info["config"])
                     
+                    # Add debugging parameters for ProxQPStrategy with default init
+                    if strategy_info['name'] == "ProxQPStrategy" and init_method == "default":
+                        strategy_cfg.verbose = True
+                        strategy_cfg.max_iter = 5000 # Increase max_iter significantly
+                    
                     # Override the default strategy with our specific one
                     solver_config.strategy = strategy_cfg
 
@@ -120,11 +125,24 @@ def main(cfg: DictConfig) -> None:
                     if len(all_layer_activities) > layer_idx_l_full:
                         norms_for_current_depth["l_full"].append(torch.linalg.norm(all_layer_activities[layer_idx_l_full].view(-1), ord=1).item())
                 
-                l1_norms_at_l1.append(np.mean(norms_for_current_depth["l1"]) if norms_for_current_depth["l1"] else np.nan)
-                l1_norms_at_l_quarter.append(np.mean(norms_for_current_depth["l_quarter"]) if norms_for_current_depth["l_quarter"] else np.nan)
-                l1_norms_at_l_half.append(np.mean(norms_for_current_depth["l_half"]) if norms_for_current_depth["l_half"] else np.nan)
-                l1_norms_at_l_three_quarter.append(np.mean(norms_for_current_depth["l_three_quarter"]) if norms_for_current_depth["l_three_quarter"] else np.nan)
-                l1_norms_at_l_full.append(np.mean(norms_for_current_depth["l_full"]) if norms_for_current_depth["l_full"] else np.nan)
+                mean_l1 = np.mean(norms_for_current_depth["l1"]) if norms_for_current_depth["l1"] else np.nan
+                mean_l_quarter = np.mean(norms_for_current_depth["l_quarter"]) if norms_for_current_depth["l_quarter"] else np.nan
+                mean_l_half = np.mean(norms_for_current_depth["l_half"]) if norms_for_current_depth["l_half"] else np.nan
+                mean_l_three_quarter = np.mean(norms_for_current_depth["l_three_quarter"]) if norms_for_current_depth["l_three_quarter"] else np.nan
+                mean_l_full = np.mean(norms_for_current_depth["l_full"]) if norms_for_current_depth["l_full"] else np.nan
+
+                l1_norms_at_l1.append(mean_l1)
+                l1_norms_at_l_quarter.append(mean_l_quarter)
+                l1_norms_at_l_half.append(mean_l_half)
+                l1_norms_at_l_three_quarter.append(mean_l_three_quarter)
+                l1_norms_at_l_full.append(mean_l_full)
+
+                print(f"        Mean L1 Norms for Depth {depth}:\n" \
+                      f"            l=1: {mean_l1:.4f}\n" \
+                      f"            l=L/4: {mean_l_quarter:.4f}\n" \
+                      f"            l=L/2: {mean_l_half:.4f}\n" \
+                      f"            l=3L/4: {mean_l_three_quarter:.4f}\n" \
+                      f"            l=L: {mean_l_full:.4f}")
             
             # Plot results for the current combination
             plt.plot(cfg.analysis.depths, l1_norms_at_l1, marker='o', linestyle='-', label='l=1')
