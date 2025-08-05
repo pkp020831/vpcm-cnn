@@ -1,7 +1,6 @@
 from copy import deepcopy
 from typing import Literal
 
-import hydra
 import torch.nn as nn
 
 from src.core import eqprop
@@ -82,6 +81,7 @@ class EqPropBackbone(nn.Module):
             layers.append(MultiplyActivation(scale=layer_scale))
         return layers
 
+    @eqprop_utils.interleave(type="both")
     def forward(self, x, return_all_activities: bool = False):
         if self.param_adjuster is not None:
             self.model.apply(self.param_adjuster)
@@ -102,10 +102,11 @@ class EqPropSequentialBackbone(nn.Module):
     def __init__(
         self,
         cfg: list[int] = [784 * 2, 128, 10 * 2],
+        beta: float = 0.1,
         bias: bool | list[bool] = [True, True],
         scale_input: int = 2,
         scale_output: int = 2,
-        solver: eqprop.solvers.EqPropSolver | None = None,  # Accepts a solver config
+        solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
         initialization: str = "default",
@@ -122,17 +123,11 @@ class EqPropSequentialBackbone(nn.Module):
                 Defaults to eqprop_utils.AdjustParams().
             eqprop_fn (str, optional): EqProp function type. Defaults to "centered".
             initialization (str, optional): Weight initialization method. Defaults to "default".
+            amp_factor (float, optional): Amplification factor for the solver. Defaults to 1.0.
         """
         super().__init__()
-
-        # Instantiate the solver from the config and store it
-        if solver is not None:
-            self.solver = hydra.utils.instantiate(solver)
-        else:
-            self.solver = None
-
         self.model = enn.EqPropSequential(
-            *self._make_layers(cfg, bias), eqprop_fn=eqprop_fn, solver=self.solver
+            *self._make_layers(cfg, bias), eqprop_fn=eqprop_fn, solver=solver
         )
         self.param_adjuster = param_adjuster
         eqprop_utils.interleave.set_num_input(scale_input)

@@ -14,7 +14,6 @@ def run_forward_pass(model: LightningModule, datamodule: LightningDataModule):
     datamodule.setup(stage='test')
     x, _ = next(iter(datamodule.test_dataloader()))
     x = x.view(x.size(0), -1)
-    x = torch.cat([x, x], dim=1)
     
     with torch.no_grad():
         activities = model.net(x, return_all_activities=True)

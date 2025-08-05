@@ -39,7 +39,7 @@ class interleave:
                 else:
                     raise ValueError("No input argument found")
             outs = func(obj, *args, **kwargs)
-            if self.type in ["out", "both"]:
+            if self.type in ["out", "both"] and not kwargs.get("return_all_activities", False):
                 outs = self.interleave_output(outs)
             return outs
 
