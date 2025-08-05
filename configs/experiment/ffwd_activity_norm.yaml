@@ -1,0 +1,55 @@
+# @package _global_
+
+# specify experiment name
+name: "Ffwd_Activity_Norm_vs_Depth"
+
+defaults:
+  - _self_
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+
+data:
+  _target_: src.data.mnist_datamodule.MNISTDataModule
+  data_dir: "data/"
+  batch_size: 1
+
+model:
+  _target_: src.models.mnist_module.MNISTLitModule
+  compile: false
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.001
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: "min"
+  net:
+    _target_: src.models.components.simple_dense_net.SimpleDenseNet
+
+seed: 12345
+
+# Analysis-specific parameters
+analysis:
+  input_size: 784
+  output_size: 10
+  width: 32  # As mentioned in the reference
+  depths: [1, 2, 4, 8, 16, 32, 64,128,256] # Depths to test
+  n_seeds: 5 # Number of seeds to average over for smoother results
+  # Combinations of parameters to plot
+  param_combinations:
+    - initialization: "orthogonal"
+      act_fn: "ReLU"
+    - initialization: "orthogonal"
+      act_fn: "Tanh"
+    - initialization: "standard"
+      act_fn: "ReLU"
+    - initialization: "standard"
+      act_fn: "Tanh"
+    - initialization: "orthogonal"
+      act_fn: "Identity"
+    - initialization: "standard"
+      act_fn: "Identity"

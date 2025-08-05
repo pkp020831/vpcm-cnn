@@ -1,6 +1,7 @@
 from copy import deepcopy
 from typing import Literal
 
+import hydra
 import torch.nn as nn
 
 from src.core import eqprop
@@ -41,6 +42,7 @@ class EqPropBackbone(nn.Module):
         solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         layer_scale: float = 4,
+        initialization: str = "default",
     ) -> None:
         """Initialize EqPropBackbone.
 
@@ -61,6 +63,13 @@ class EqPropBackbone(nn.Module):
         eqprop_utils.interleave.set_num_input(scale_input)
         eqprop_utils.interleave.set_num_output(scale_output)
 
+        if initialization == "orthogonal":
+            for m in self.model.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+
     def _make_layers(self, cfg, bias, solver, layer_scale) -> list[nn.Module]:
         layers = []
         for idx in range(len(cfg) - 1):
@@ -73,24 +82,33 @@ class EqPropBackbone(nn.Module):
             layers.append(MultiplyActivation(scale=layer_scale))
         return layers
 
-    @eqprop_utils.interleave(type="both")
-    def forward(self, x):
+    def forward(self, x, return_all_activities: bool = False):
         if self.param_adjuster is not None:
             self.model.apply(self.param_adjuster)
-        return self.model(x)
+
+        activities = [x] # Store input activity
+        current_output = x
+        for layer in self.model:
+            current_output = layer(current_output)
+            activities.append(current_output)
+        
+        if return_all_activities:
+            return activities
+        else:
+            return activities[-1] # Return only the final output by default
 
 
 class EqPropSequentialBackbone(nn.Module):
     def __init__(
         self,
         cfg: list[int] = [784 * 2, 128, 10 * 2],
-        beta: float = 0.1,
         bias: bool | list[bool] = [True, True],
         scale_input: int = 2,
         scale_output: int = 2,
-        solver: eqprop.solvers.EqPropSolver | None = None,
+        solver: eqprop.solvers.EqPropSolver | None = None,  # Accepts a solver config
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
+        initialization: str = "default",
     ) -> None:
         """Initialize EqPropBackbone.
 
@@ -103,14 +121,29 @@ class EqPropSequentialBackbone(nn.Module):
             param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
                 Defaults to eqprop_utils.AdjustParams().
             eqprop_fn (str, optional): EqProp function type. Defaults to "centered".
+            initialization (str, optional): Weight initialization method. Defaults to "default".
         """
         super().__init__()
+
+        # Instantiate the solver from the config and store it
+        if solver is not None:
+            self.solver = hydra.utils.instantiate(solver)
+        else:
+            self.solver = None
+
         self.model = enn.EqPropSequential(
-            *self._make_layers(cfg, bias), eqprop_fn=eqprop_fn, solver=solver
+            *self._make_layers(cfg, bias), eqprop_fn=eqprop_fn, solver=self.solver
         )
         self.param_adjuster = param_adjuster
         eqprop_utils.interleave.set_num_input(scale_input)
         eqprop_utils.interleave.set_num_output(scale_output)
+
+        if initialization == "orthogonal":
+            for m in self.model.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
 
     @staticmethod
     def _make_layers(cfg, bias):

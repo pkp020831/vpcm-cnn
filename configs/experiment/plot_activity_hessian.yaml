@@ -7,6 +7,12 @@ name: "Plot_Activity_Hessian"
 defaults:
   - _self_
 
+#outputs 파일 생성 방지
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+
 data:
   _target_: src.data.mnist_datamodule.MNISTDataModule
   data_dir: "data/"
@@ -30,11 +36,10 @@ model:
     factor: 0.1
     patience: 10
   net:
-    _target_: src.models.components.simple_dense_net.SimpleDenseNet
+    _target_: src._eqprop.backbone.EqPropBackbone #EqPropBackbone
     _allow_new_keys: true
-    input_size: 784
-    output_size: 10
-
+    bias: True
+    initialization: orthogonal
 callbacks:
   model_checkpoint:
     _target_: lightning.pytorch.callbacks.ModelCheckpoint
@@ -79,6 +84,6 @@ analysis:
     initialization: "random"
   solver:
     _target_: src.core.eqprop.solvers.AnalogEqPropSolver
-    _partial_: true
-    amp_factor: 1.0
-    beta: 0.1
+    strategy: ${analysis.solver_strategy}
+    amp_factor: 6
+    beta: 1

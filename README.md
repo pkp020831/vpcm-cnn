@@ -74,7 +74,16 @@ python src/train.py trainer.max_epochs=20 data.batch_size=64
 ```
 
 ```plot hessian activity condition number
-PYTHONPATH=. python scripts/plot_activity_hessian.py
+PYTHONPATH=. python scripts/plot_hessian_energy.py     # RECOMMENDED, compute hessian by energy function
+PYTHONPATH=. python scripts/plot_activity_hessian.py   # compute hessian by Equation in paper
+PYTHONPATH=. python scripts/plot_hessian_energy_seq.py # RECOMMENDED, compute hessian for EqPropSequentialBackbone by energy function 
+
+```
+
+```plot ffwd activity norm
+PYTHONPATH=. python scripts/plot_ffwd_norm_BP.py 
+
+```
 ```
 *EQProp preferred setting*
 python src/train.py model/net=ep_mnist model.net.beta=1 model.net.solver.amp_factor=6.0 model/optimizer=adamw trainer=gpu 
@@ -86,7 +95,5 @@ ze=128
 
 python src/train.py model/net=ep_mnist model.net.beta=1.717 model.net.solver.amp_factor=11.879 model.optimizer.lr=0.00125 model/optimizer=adamw trainer=gpu logger=[csv,wandb] data.batch_size=256
 
-make plot-ill-conditioning
-make plot-hessian-condition
 
 python src/train.py model/net=ep_mnist model.net.beta=1.1221 model.net.solver.amp_factor=12.441 model.optimizer.lr=0.005738 model/optimizer=adamw trainer=gpu logger=[csv,wandb] data.batch_size=256 #128-64 0.5~

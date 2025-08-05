@@ -4,7 +4,7 @@ defaults:
   - /eqprop/solver/strategy: proxqp
 _target_: src._eqprop.EqPropBackbone
 beta: 0.1
-bias: false
+bias: true
 scale_input: 2
 scale_output: 2
 cfg: ???

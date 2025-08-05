@@ -1,0 +1,68 @@
+# @package _global_
+
+# specify experiment name
+name: "Ffwd_Activity_Norm_vs_Depth_EPB"
+
+defaults:
+  - _self_
+
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+
+data:
+  _target_: src.data.mnist_datamodule.MNISTDataModule
+  data_dir: "data/"
+  batch_size: 1
+
+model:
+  _target_: src.models.mnist_module.MNISTLitModule
+  compile: false
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.001
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    _partial_: true
+    mode: "min"
+  net:
+    _target_: src._eqprop.backbone.EqPropBackbone
+    beta: 0.1
+    solver:
+      _target_: src.core.eqprop.solvers.AnalogEqPropSolver
+      amp_factor: 1.0
+      beta: 0.1
+      strategy:
+        _target_: src.core.eqprop.strategy.strategies.ProxQPStrategy
+        rtol: 1.0e-5
+        activation:
+          _target_: src.core.eqprop.activation.IdealRectifier
+
+seed: 12345
+
+# Analysis-specific parameters
+analysis:
+  input_size: 784
+  output_size: 10
+  width: 32
+  depths: [1, 2, 4, 8, 16, 32, 64, 128, 256]
+  n_seeds: 5 # Further reduced for memory testing
+  # Combinations of parameters to plot
+  param_combinations:
+    - initialization: "orthogonal"
+      act_fn: "IdealRectifier"
+    - initialization: "standard"
+      act_fn: "IdealRectifier"
+
+# Disable all loggers
+logger:
+  aim: null
+  comet: null
+  csv: null
+  json: null
+  mlflow: null
+  neptune: null
+  tensorboard: null
+  wandb: null
