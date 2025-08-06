@@ -156,10 +156,10 @@ class EqPropSequentialBackbone(nn.Module):
         return layers
 
     @eqprop_utils.interleave(type="both")
-    def forward(self, x):
+    def forward(self, x, return_all_activities: bool = False):
         if self.param_adjuster is not None:
             self.model.apply(self.param_adjuster)
-        return self.model(x)
+        return self.model(x, return_all_activities=return_all_activities)
 
 
 class HybridEqPropBackbone(EqPropBackbone):

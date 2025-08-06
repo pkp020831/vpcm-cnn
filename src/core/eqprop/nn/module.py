@@ -555,12 +555,22 @@ class EqPropSequential(nn.Sequential):
             a = self.solver.amp_factor
             prev_nodes = (p * a, n * a)  # Update for next layer
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+    def forward(self, x: torch.Tensor, return_all_activities: bool = False):  # type: ignore[override]
         """Forward pass using EqProp.
 
-        Note that children layers doesn't call forward() directly"""
-        x.requires_grad_()
-        return self.eqprop_fn(self, x)
+        Note that children layers don't call forward() directly.
+        """
+        if return_all_activities:
+            # For inference/analysis, bypass the autograd function to get all activities.
+            # This will not compute gradients.
+            with torch.no_grad():
+                # The solver returns a tuple of layer activations
+                activities_tuple = self.solver(x)
+                return [x] + list(activities_tuple)
+        else:
+            # For training, use the custom autograd function.
+            x.requires_grad_()
+            return self.eqprop_fn(self, x)
 
     # No-op methods for EqProp interface compatibility
     def calc_n_set_param_grad_(

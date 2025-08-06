@@ -46,9 +46,9 @@ seed: 12345
 analysis:
   input_size: 784
   output_size: 10
-  width: 32
-  depths: [1, 2, 4, 8, 16, 32, 64, 128, 256]
-  n_seeds: 5 # Further reduced for memory testing
+  width: 4
+  depths: [8, 16, 32, 64, 128, 256, 512]
+  n_seeds: 10
   # Combinations of parameters to plot
   param_combinations:
     - initialization: "orthogonal"

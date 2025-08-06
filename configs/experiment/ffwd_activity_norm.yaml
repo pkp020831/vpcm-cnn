@@ -36,9 +36,9 @@ seed: 12345
 analysis:
   input_size: 784
   output_size: 10
-  width: 32  # As mentioned in the reference
-  depths: [1, 2, 4, 8, 16, 32, 64,128,256] # Depths to test
-  n_seeds: 5 # Number of seeds to average over for smoother results
+  width: 128  # As mentioned in the reference
+  depths: [8, 16, 32, 64,128,256,512] # Depths to test
+  n_seeds: 1 # Number of seeds to average over for smoother results
   # Combinations of parameters to plot
   param_combinations:
     - initialization: "orthogonal"

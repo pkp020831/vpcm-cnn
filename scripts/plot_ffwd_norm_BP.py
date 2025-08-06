@@ -109,15 +109,20 @@ def main(cfg: DictConfig) -> None:
                 
                 # Ensure we have enough layers for the calculated indices
                 if len(all_layer_activities) > layer_idx_l1:
-                    norms_for_current_depth["l1"].append(torch.linalg.norm(all_layer_activities[layer_idx_l1].view(-1), ord=1).item())
+                    activity = all_layer_activities[layer_idx_l1]
+                    norms_for_current_depth["l1"].append(torch.mean(torch.abs(activity)).item())
                 if len(all_layer_activities) > layer_idx_l_quarter:
-                    norms_for_current_depth["l_quarter"].append(torch.linalg.norm(all_layer_activities[layer_idx_l_quarter].view(-1), ord=1).item())
+                    activity = all_layer_activities[layer_idx_l_quarter]
+                    norms_for_current_depth["l_quarter"].append(torch.mean(torch.abs(activity)).item())
                 if len(all_layer_activities) > layer_idx_l_half:
-                    norms_for_current_depth["l_half"].append(torch.linalg.norm(all_layer_activities[layer_idx_l_half].view(-1), ord=1).item())
+                    activity = all_layer_activities[layer_idx_l_half]
+                    norms_for_current_depth["l_half"].append(torch.mean(torch.abs(activity)).item())
                 if len(all_layer_activities) > layer_idx_l_three_quarter:
-                    norms_for_current_depth["l_three_quarter"].append(torch.linalg.norm(all_layer_activities[layer_idx_l_three_quarter].view(-1), ord=1).item())
+                    activity = all_layer_activities[layer_idx_l_three_quarter]
+                    norms_for_current_depth["l_three_quarter"].append(torch.mean(torch.abs(activity)).item())
                 if len(all_layer_activities) > layer_idx_l_full:
-                    norms_for_current_depth["l_full"].append(torch.linalg.norm(all_layer_activities[layer_idx_l_full].view(-1), ord=1).item())
+                    activity = all_layer_activities[layer_idx_l_full]
+                    norms_for_current_depth["l_full"].append(torch.mean(torch.abs(activity)).item())
             
             # Append mean norms for this depth
             l1_norms_at_l1.append(np.mean(norms_for_current_depth["l1"]) if norms_for_current_depth["l1"] else np.nan)
@@ -138,7 +143,7 @@ def main(cfg: DictConfig) -> None:
         plt.ylabel("Mean L1 Norm of Activity", fontsize=14)
         plt.title(f"Feedforward Pass Stability (init={params.initialization}, act={params.act_fn})", fontsize=16)
         plt.xscale('log')
-        plt.yscale('log')
+        plt.yscale('linear')
         plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
         plt.grid(True, which="both", ls="--")
         plt.legend()

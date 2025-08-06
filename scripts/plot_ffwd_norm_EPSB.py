@@ -13,10 +13,15 @@ def run_forward_pass(model: LightningModule, datamodule: LightningDataModule):
     model.eval()
     datamodule.setup(stage='test')
     x, _ = next(iter(datamodule.test_dataloader()))
-    x = x.view(x.size(0), -1)
+    x = x.reshape(x.size(0), -1)
     
     with torch.no_grad():
         activities = model.net(x, return_all_activities=True)
+        print("\n--- Layer Activities ---")
+        for i, act in enumerate(activities):
+            norm = torch.mean(torch.abs(act)).item()
+            print(f"Layer {i}: shape={act.shape}, Mean L1 Norm={norm:.4f}")
+        print("----------------------\n")
     return activities
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="experiment/ffwd_norm_epb.yaml")
@@ -68,11 +73,11 @@ def main(cfg: DictConfig) -> None:
             for depth in cfg.analysis.depths:
                 print(f"    Testing Depth (L): {depth}")
                 
-                layer_idx_l1 = 2
-                layer_idx_l_quarter = min(2 * depth, max(2, int(2 * (depth / 4))))
-                layer_idx_l_half = min(2 * depth, max(2, int(2 * (depth / 2))))
-                layer_idx_l_three_quarter = min(2 * depth, max(2, int(2 * (3 * depth / 4))))
-                layer_idx_l_full = 2 * depth
+                layer_idx_l1 = 1
+                layer_idx_l_quarter = min(depth, max(1, int(depth / 4)))
+                layer_idx_l_half = min(depth, max(1, int(depth / 2)))
+                layer_idx_l_three_quarter = min(depth, max(1, int(3 * depth / 4)))
+                layer_idx_l_full = depth
 
                 norms_for_current_depth = {"l1": [], "l_quarter": [], "l_half": [], "l_three_quarter": [], "l_full": []}
 
@@ -102,6 +107,7 @@ def main(cfg: DictConfig) -> None:
                     }
                     
                     net_config = OmegaConf.create(cfg.model.net)
+                    net_config._target_ = "src._eqprop.backbone.EqPropSequentialBackbone"
                     net_config.update(net_params)
                     
                     net = hydra.utils.instantiate(net_config)
@@ -161,12 +167,12 @@ def main(cfg: DictConfig) -> None:
             plt.ylabel("Mean L1 Norm of Activity", fontsize=14)
             plt.title(f"Feedforward Pass Stability (strategy={strategy_info['name']}, init={init_method})", fontsize=16)
             plt.xscale('log')
-            plt.yscale('log')
+            plt.yscale('linear')
             plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
             plt.grid(True, which="both", ls="--")
             plt.legend()
             
-            save_dir = f"plotting/ffwd_activity_norm/EPB_strategies/"
+            save_dir = f"plotting/ffwd_activity_norm/EPSB_strategies/"
             os.makedirs(save_dir, exist_ok=True)
             save_path = f"{save_dir}{strategy_info['name']}_{init_method}.png"
             plt.savefig(save_path)
