@@ -39,7 +39,7 @@ model:
     _target_: src._eqprop.backbone.EqPropBackbone #EqPropBackbone
     _allow_new_keys: true
     bias: True
-    initialization: orthogonal
+    initialization: default
 callbacks:
   model_checkpoint:
     _target_: lightning.pytorch.callbacks.ModelCheckpoint

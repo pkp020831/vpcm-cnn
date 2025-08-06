@@ -42,6 +42,7 @@ class EqPropBackbone(nn.Module):
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         layer_scale: float = 4,
         initialization: str = "default",
+        residual: bool = False, # Add residual argument
     ) -> None:
         """Initialize EqPropBackbone.
 
@@ -54,8 +55,11 @@ class EqPropBackbone(nn.Module):
             param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
                 Defaults to eqprop_utils.AdjustParams().
             layer_scale (float, optional): Scaling factor between eqprop layers. Defaults to 4.0.
+            initialization (str, optional): Weight initialization method. Defaults to "default".
+            residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
         """
         super().__init__()
+        self.residual = residual # Store residual flag
         layers = self._make_layers(cfg, bias, solver, layer_scale)
         self.model = nn.Sequential(*layers)
         self.param_adjuster = param_adjuster
@@ -88,8 +92,38 @@ class EqPropBackbone(nn.Module):
 
         activities = [x] # Store input activity
         current_output = x
-        for layer in self.model:
-            current_output = layer(current_output)
+        
+        # This variable will hold the input to the *current* EqPropLinear layer
+        # It's used for the shortcut connection. It gets updated after each MultiplyActivation layer.
+        input_for_shortcut = x 
+
+        # Iterate through layers in self.model (which are [EqPropLinear, MultiplyActivation, ...])
+        # The loop index 'i' refers to the index within self.model.
+        for i, layer in enumerate(self.model):
+            if isinstance(layer, enn.EqPropLinear):
+                # This is an EqPropLinear layer
+                linear_output = layer(current_output)
+                
+                # Apply shortcut if residual is True and this is a hidden EqPropLinear layer.
+                # Hidden EqPropLinear layers are those not at index 0 (first)
+                # AND not the last EqPropLinear (i = len(self.model) - 2).
+                if self.residual and i > 0 and i < len(self.model) - 2:
+                    # Check if dimensions match for shortcut connection
+                    if linear_output.shape != input_for_shortcut.shape:
+                        raise ValueError(
+                            f"Dimension mismatch for residual connection at layer {i}: "
+                            f"Linear output shape {linear_output.shape} vs shortcut input shape {input_for_shortcut.shape}"
+                        )
+                    current_output = linear_output + input_for_shortcut
+                else:
+                    current_output = linear_output
+                
+            elif isinstance(layer, MultiplyActivation):
+                # This is a MultiplyActivation layer, apply it to the current_output
+                current_output = layer(current_output)
+                # After MultiplyActivation, the output becomes the new input for the next potential shortcut
+                input_for_shortcut = current_output
+            
             activities.append(current_output)
         
         if return_all_activities:

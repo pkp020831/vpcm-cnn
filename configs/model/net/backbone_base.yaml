@@ -11,3 +11,5 @@ cfg: ???
 
 param_adjuster:
   _target_: src.utils.eqprop_utils.AdjustParams
+
+#residual: true # Add this line for residual control
