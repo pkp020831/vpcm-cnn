@@ -29,17 +29,18 @@ model:
     mode: "min"
   net:
     _target_: src._eqprop.backbone.EqPropBackbone
-    beta: 0.1
-    residual: true
-    res_scale: 0
+    beta: 1.5
+    residual: false
+    res_scale: 0.1
     
     solver:
       _target_: src.core.eqprop.solvers.AnalogEqPropSolver
-      amp_factor: 1.0
-      beta: 0.1
+      amp_factor: 1.5
+      beta: 1.5
       strategy:
         _target_: src.core.eqprop.strategy.strategies.ProxQPStrategy
         rtol: 1.0e-5
+        amp_factor: 1.5
         activation:
           _target_: src.core.eqprop.activation.IdealRectifier
 
@@ -49,7 +50,7 @@ seed: 12345
 analysis:
   input_size: 784
   output_size: 10
-  width: 4
+  width: 128
   depths: [8, 16, 32, 64, 128, 256, 512]
   n_seeds: 10
   # Combinations of parameters to plot

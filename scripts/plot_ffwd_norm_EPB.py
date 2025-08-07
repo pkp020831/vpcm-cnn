@@ -32,13 +32,14 @@ def main(cfg: DictConfig) -> None:
             "config": {
                 "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
                 "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
+                "amp_factor": cfg.model.net.solver.strategy.get("amp_factor", 1.0),
             }
         },
         {
             "name": "NewtonStrategy",
             "config": {
                 "_target_": "src.core.eqprop.strategy.NewtonStrategy",
-                "activation": {"_target_": "src.core.eqprop.activation.P3OTS"} # Use P3OTS as per its default config
+                "activation": {"_target_": "src.core.eqprop.activation.P3OTS"} # Use SymReLU as per its default config
             }
         },
         {
@@ -98,7 +99,8 @@ def main(cfg: DictConfig) -> None:
                         "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
                         "initialization": init_method,
                         "solver": solver_config,
-                        "bias": [True] * (depth + 1)
+                        "bias": [True] * (depth + 1),
+                        "layer_scale": 1 # Set layer_scale to 1.0 to prevent explosion
                     }
                     
                     net_config = OmegaConf.create(cfg.model.net)
@@ -159,7 +161,7 @@ def main(cfg: DictConfig) -> None:
             # --- Finalize Plot for the current combination ---
             plt.xlabel("Network Depth (L)", fontsize=14)
             plt.ylabel("Mean L1 Norm of Activity", fontsize=14)
-            plt.title(f"Feedforward Pass Stability (strategy={strategy_info['name']}, init={init_method})", fontsize=16)
+            plt.title(f"Feedforward Pass Stability (strategy={strategy_info['name']}, init={init_method}, res_scale={cfg.model.net.res_scale})", fontsize=16)
             plt.xscale('log')
             plt.yscale('log')
             plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
