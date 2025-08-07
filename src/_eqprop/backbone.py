@@ -42,7 +42,8 @@ class EqPropBackbone(nn.Module):
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         layer_scale: float = 4,
         initialization: str = "default",
-        residual: bool = False, # Add residual argument
+        residual: bool = False,  # Add residual argument
+        res_scale: float = 1.0,  # Add res_scale for scaling the residual
     ) -> None:
         """Initialize EqPropBackbone.
 
@@ -57,9 +58,11 @@ class EqPropBackbone(nn.Module):
             layer_scale (float, optional): Scaling factor between eqprop layers. Defaults to 4.0.
             initialization (str, optional): Weight initialization method. Defaults to "default".
             residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
+            res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
         super().__init__()
-        self.residual = residual # Store residual flag
+        self.residual = residual  # Store residual flag
+        self.res_scale = res_scale
         layers = self._make_layers(cfg, bias, solver, layer_scale)
         self.model = nn.Sequential(*layers)
         self.param_adjuster = param_adjuster
@@ -114,7 +117,7 @@ class EqPropBackbone(nn.Module):
                             f"Dimension mismatch for residual connection at layer {i}: "
                             f"Linear output shape {linear_output.shape} vs shortcut input shape {input_for_shortcut.shape}"
                         )
-                    current_output = linear_output + input_for_shortcut
+                    current_output = self.res_scale * linear_output + input_for_shortcut
                 else:
                     current_output = linear_output
                 
@@ -144,6 +147,8 @@ class EqPropSequentialBackbone(nn.Module):
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
         initialization: str = "default",
+        residual: bool = False,
+        res_scale: float = 1.0,
     ) -> None:
         """Initialize EqPropBackbone.
 
@@ -158,10 +163,18 @@ class EqPropSequentialBackbone(nn.Module):
             eqprop_fn (str, optional): EqProp function type. Defaults to "centered".
             initialization (str, optional): Weight initialization method. Defaults to "default".
             amp_factor (float, optional): Amplification factor for the solver. Defaults to 1.0.
+            residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
+            res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
         super().__init__()
+        self.residual = residual
+        self.res_scale = res_scale
         self.model = enn.EqPropSequential(
-            *self._make_layers(cfg, bias), eqprop_fn=eqprop_fn, solver=solver
+            *self._make_layers(cfg, bias),
+            eqprop_fn=eqprop_fn,
+            solver=solver,
+            residual=residual,
+            res_scale=res_scale,
         )
         self.param_adjuster = param_adjuster
         eqprop_utils.interleave.set_num_input(scale_input)

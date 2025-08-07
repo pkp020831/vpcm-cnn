@@ -1,7 +1,7 @@
 # @package model.net
 defaults:
   - /eqprop/solver: default
-  - /eqprop/solver/strategy: proxqp
+  - /eqprop/solver/strategy: resistive 
 _target_: src._eqprop.EqPropBackbone
 beta: 0.1
 bias: true
@@ -12,4 +12,5 @@ cfg: ???
 param_adjuster:
   _target_: src.utils.eqprop_utils.AdjustParams
 
-#residual: true # Add this line for residual control
+residual: true # Add this line for residual control
+res_scale: 0

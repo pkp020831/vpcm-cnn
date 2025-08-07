@@ -30,6 +30,9 @@ model:
   net:
     _target_: src._eqprop.backbone.EqPropBackbone
     beta: 0.1
+    residual: true
+    res_scale: 0
+    
     solver:
       _target_: src.core.eqprop.solvers.AnalogEqPropSolver
       amp_factor: 1.0

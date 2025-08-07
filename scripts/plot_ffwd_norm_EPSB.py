@@ -33,9 +33,9 @@ def main(cfg: DictConfig) -> None:
     # Define the strategies and initializations to test
     strategies_to_test = [
         {
-            "name": "ProxQPStrategy",
+            "name": "ResistiveNetworkStrategy",
             "config": {
-                "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
+                "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
                 "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
             }
         },
@@ -47,9 +47,9 @@ def main(cfg: DictConfig) -> None:
             }
         },
         {
-            "name": "ResistiveNetworkStrategy",
+            "name": "ProxQPStrategy",
             "config": {
-                "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
+                "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
                 "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
             }
         }
