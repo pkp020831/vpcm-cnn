@@ -50,11 +50,11 @@ def main(cfg: DictConfig) -> None:
             }
         }
     ]
-    initializations_to_test = ["orthogonal", "default"]
-
     # --- Loop through every combination of strategy and initialization ---
     for strategy_info in strategies_to_test:
-        for init_method in initializations_to_test:
+        for init_info in cfg.analysis.param_combinations:
+            init_method = init_info.name
+            init_params = init_info.params
             
             # Create a new figure for each combination
             plt.figure(figsize=(12, 8))
@@ -97,11 +97,11 @@ def main(cfg: DictConfig) -> None:
 
                     net_params = {
                         "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
-                        "initialization": init_method,
                         "solver": solver_config,
                         "bias": [True] * (depth + 1),
                         "layer_scale": 1 # Set layer_scale to 1.0 to prevent explosion
                     }
+                    net_params.update(init_params)
                     
                     net_config = OmegaConf.create(cfg.model.net)
                     net_config.update(net_params)

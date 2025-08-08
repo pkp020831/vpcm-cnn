@@ -8,4 +8,3 @@ cfg:
   - 128
   - 128
   - ${eval:'10*${model.net.scale_output}'}
-initialization: default

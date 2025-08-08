@@ -55,10 +55,14 @@ analysis:
   n_seeds: 10
   # Combinations of parameters to plot
   param_combinations:
-    - initialization: "orthogonal"
-      act_fn: "IdealRectifier"
-    - initialization: "standard"
-      act_fn: "IdealRectifier"
+    - name: "orthogonal"
+      params: {initialization: "orthogonal"}
+    - name: "default"
+      params: {initialization: "default"}
+    - name: "gaussian_var1"
+      params: {initialization: "gaussian", init_variance: 1.0}
+    - name: "gaussian_var_1_over_width"
+      params: {initialization: "gaussian", init_variance: 0.0078125}
 
 # Disable all loggers
 logger:

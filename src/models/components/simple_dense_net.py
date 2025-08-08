@@ -11,6 +11,7 @@ class SimpleDenseNet(nn.Module):
         hidden_sizes: list[int] = [256, 256, 256],
         output_size: int = 10,
         initialization: str = "default",
+        init_variance: float | None = None,
         act_fn: str = "ReLU", # Added activation function parameter
     ) -> None:
         """Initialize a `SimpleDenseNet` module."""
@@ -41,6 +42,15 @@ class SimpleDenseNet(nn.Module):
             for m in self.model.modules():
                 if isinstance(m, nn.Linear):
                     nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif initialization == "gaussian":
+            if init_variance is None:
+                raise ValueError("init_variance must be specified for gaussian initialization.")
+            for m in self.model.modules():
+                if isinstance(m, nn.Linear):
+                    std = init_variance**0.5
+                    nn.init.normal_(m.weight, mean=0.0, std=std)
                     if m.bias is not None:
                         nn.init.constant_(m.bias, 0)
 

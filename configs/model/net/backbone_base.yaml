@@ -2,6 +2,9 @@
 defaults:
   - /eqprop/solver: default
   - /eqprop/solver/strategy: proxqp
+  - initialization: default
+  - _self_
+
 _target_: src._eqprop.EqPropBackbone
 beta: 0.1
 bias: true
@@ -9,9 +12,12 @@ scale_input: 2
 scale_output: 2
 cfg: ???
 
+initialization: gaussian
+init_variance: 1
+
 param_adjuster:
   _target_: src.utils.eqprop_utils.AdjustParams
 
-residual: true # Add this line for residual control
+residual: false # Add this line for residual control
 res_scale: 1
 layer_scale: 1

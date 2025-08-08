@@ -42,6 +42,7 @@ class EqPropBackbone(nn.Module):
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         layer_scale: float = 4,
         initialization: str = "default",
+        init_variance: float | None = None,
         residual: bool = False,  # Add residual argument
         res_scale: float = 1.0,  # Add res_scale for scaling the residual
     ) -> None:
@@ -57,6 +58,7 @@ class EqPropBackbone(nn.Module):
                 Defaults to eqprop_utils.AdjustParams().
             layer_scale (float, optional): Scaling factor between eqprop layers. Defaults to 4.0.
             initialization (str, optional): Weight initialization method. Defaults to "default".
+            init_variance (float | None, optional): Variance for gaussian initialization. Defaults to None.
             residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
             res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
@@ -73,6 +75,17 @@ class EqPropBackbone(nn.Module):
             for m in self.model.modules():
                 if isinstance(m, nn.Linear):
                     nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif initialization == "gaussian":
+            if init_variance is None:
+                raise ValueError("init_variance must be specified for gaussian initialization.")
+            print(f"DEBUG: Initializing EqPropBackbone with gaussian, init_variance={init_variance}")
+            for i, m in enumerate(self.model.modules()):
+                if isinstance(m, nn.Linear):
+                    std = init_variance**0.5
+                    nn.init.normal_(m.weight, mean=0.0, std=std)
+                    print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
                     if m.bias is not None:
                         nn.init.constant_(m.bias, 0)
 
@@ -147,6 +160,7 @@ class EqPropSequentialBackbone(nn.Module):
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
         initialization: str = "default",
+        init_variance: float | None = None,
         residual: bool = False,
         res_scale: float = 1.0,
     ) -> None:
@@ -162,19 +176,17 @@ class EqPropSequentialBackbone(nn.Module):
                 Defaults to eqprop_utils.AdjustParams().
             eqprop_fn (str, optional): EqProp function type. Defaults to "centered".
             initialization (str, optional): Weight initialization method. Defaults to "default".
+            init_variance (float | None, optional): Variance for gaussian initialization. Defaults to None.
             amp_factor (float, optional): Amplification factor for the solver. Defaults to 1.0.
             residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
             res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
         super().__init__()
-        self.residual = residual
-        self.res_scale = res_scale
+        
         self.model = enn.EqPropSequential(
             *self._make_layers(cfg, bias),
             eqprop_fn=eqprop_fn,
             solver=solver,
-            residual=residual,
-            res_scale=res_scale,
         )
         self.param_adjuster = param_adjuster
         eqprop_utils.interleave.set_num_input(scale_input)
@@ -184,6 +196,17 @@ class EqPropSequentialBackbone(nn.Module):
             for m in self.model.modules():
                 if isinstance(m, nn.Linear):
                     nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif initialization == "gaussian":
+            if init_variance is None:
+                raise ValueError("init_variance must be specified for gaussian initialization.")
+            print(f"DEBUG: Initializing EqPropSequentialBackbone with gaussian, init_variance={init_variance}")
+            for i, m in enumerate(self.model.modules()):
+                if isinstance(m, nn.Linear):
+                    std = init_variance**0.5
+                    nn.init.normal_(m.weight, mean=0.0, std=std)
+                    print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
                     if m.bias is not None:
                         nn.init.constant_(m.bias, 0)
 

@@ -1,0 +1,2 @@
+initialization: gaussian
+init_variance: 1.0
