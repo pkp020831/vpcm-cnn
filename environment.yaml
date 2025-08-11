@@ -44,3 +44,4 @@ dependencies:
       - hydra-colorlog
       - rootutils
       - pytorch-optimizer
+      - matplotlib

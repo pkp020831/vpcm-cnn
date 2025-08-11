@@ -1,8 +1,10 @@
 from typing import Any, Dict, List, Optional, Tuple
-
+import gc
+import torch
 import hydra
 import lightning as L
 import rootutils
+import wandb
 
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
@@ -103,6 +105,22 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     # merge train and test metrics
     metric_dict = {**train_metrics, **test_metrics}
+
+    # finish wandb run to prevent resource leaks in multiruns
+    if wandb.run:
+        wandb.finish()
+
+    # Explicitly clean up memory for multiruns
+    del model
+    del datamodule
+    del trainer
+    del callbacks
+    del logger
+    gc.collect()
+
+    # Empty CUDA cache if available
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     return metric_dict, object_dict
 

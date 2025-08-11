@@ -48,19 +48,19 @@ hydra:
       #eqprop
       # EqProp-specific parameters
       model.net.beta: 1.5
-      model.net.solver.amp_factor: tag(interval(1,2))
+      model.net.solver.amp_factor: tag(interval(1.3,1.4))
       model.optimizer.lr: 0.001
       data.batch_size: 64
-      trainer.min_epochs: 3
-      trainer.max_epochs: 3
+      trainer.min_epochs: 1
+      trainer.max_epochs: 1
       model.net.res_scale: 1 #tag(log,interval(0.01,1))
+      logger.wandb.offline: false
       #model.net.layer_scale: 1
 
       # General model/data parameters
       
       # Network hidden layer size
       #model.net.cfg[1]: choice(64, 128, 256)
-
 
 
 

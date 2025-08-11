@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
         {"name": "orthogonal"},
         {"name": "default"},
         #{"name": "gaussian", "variance": 0.0078125}, # 1/128
-        {"name": "mup", "width": 128, "depth": 6, "variance": 1.0}
+        {"name": "mup", "width": 128, "depth": 0, "variance": 1.0}
     ]
 
     # --- Loop through every combination of strategy and initialization ---
