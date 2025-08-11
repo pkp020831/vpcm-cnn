@@ -32,18 +32,19 @@ def main(cfg: DictConfig) -> None:
 
     # Define the strategies and initializations to test
     strategies_to_test = [
-        {
-            "name": "ResistiveNetworkStrategy",
-            "config": {
-                "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
-                "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
-            }
-        },
+        #{
+        #    "name": "ResistiveNetworkStrategy",
+        #    "config": {
+        #        "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
+        #        "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
+        #    }
+        #},
         {
             "name": "ProxQPStrategy",
             "config": {
                 "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
                 "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
+                "amp_factor": 1.0
             }
         }
         #{
@@ -59,7 +60,7 @@ def main(cfg: DictConfig) -> None:
         {"name": "orthogonal"},
         {"name": "default"},
         #{"name": "gaussian", "variance": 0.0078125}, # 1/128
-        {"name": "mup", "width": 128, "depth": 3, "variance": 1.0}
+        {"name": "mup", "width": 128, "depth": 6, "variance": 1.0}
     ]
 
     # --- Loop through every combination of strategy and initialization ---
@@ -91,6 +92,13 @@ def main(cfg: DictConfig) -> None:
                     seed_everything(cfg.seed + seed)
                     
                     # --- Instantiate Model with current strategy and initialization ---
+                    # Create a mutable copy of the initialization config for the current depth
+                    init_config = init_method_dict.copy()
+                    
+                    # If using muP, dynamically set its depth to the current network depth
+                    if init_config['name'] == 'mup':
+                        init_config['depth'] = depth+1
+
                     # Start with the base solver config from the main YAML
                     solver_config = OmegaConf.create(cfg.model.net.solver)
                     
@@ -107,7 +115,7 @@ def main(cfg: DictConfig) -> None:
 
                     net_params = {
                         "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
-                        "initialization": init_method_dict, # Pass the dictionary directly
+                        "initialization": init_config, # Pass the dynamically updated dictionary
                         "solver": solver_config,
                         "bias": [True] * (depth + 1)
                     }

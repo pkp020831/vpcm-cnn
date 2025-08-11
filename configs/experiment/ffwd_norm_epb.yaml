@@ -35,12 +35,12 @@ model:
     
     solver:
       _target_: src.core.eqprop.solvers.AnalogEqPropSolver
-      amp_factor: 1.5
+      amp_factor: 0
       beta: 1.5
       strategy:
         _target_: src.core.eqprop.strategy.strategies.ProxQPStrategy
         rtol: 1.0e-5
-        amp_factor: 1.5
+        amp_factor: 0
         activation:
           _target_: src.core.eqprop.activation.IdealRectifier
 
