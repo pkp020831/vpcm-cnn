@@ -1,11 +1,44 @@
 from copy import deepcopy
 from typing import Literal
+import math
+import torch
 
 import torch.nn as nn
 
 from src.core import eqprop
 from src.core.eqprop import nn as enn
 from src.utils import eqprop_utils
+
+
+def mup_initialization(model, width, depth, variance=1.0):
+    """
+    Performs muP initialization on a model.
+    Assumes model contains a sequence of nn.Linear layers.
+    """
+    std = math.sqrt(variance)
+    
+    # Extract linear layers from the model
+    linear_layers = [m for m in model.modules() if isinstance(m, nn.Linear)]
+    num_layers = len(linear_layers)
+
+    if num_layers == 0:
+        print("Warning: No linear layers found for muP initialization.")
+        return
+
+    for i, layer in enumerate(linear_layers):
+        # Start with standard Gaussian initialization
+        nn.init.normal_(layer.weight, mean=0.0, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
+        # Apply muP scaling
+        with torch.no_grad():
+            if i == 0:  # Input layer
+                layer.weight.data *= math.sqrt(1 / 1568)
+            elif i == num_layers - 1:  # Output layer
+                layer.weight.data *= math.sqrt(width)
+            else:  # Hidden layer
+                layer.weight.data *= math.sqrt(width * depth)
 
 
 class MultiplyActivation(nn.Module):
@@ -159,8 +192,7 @@ class EqPropSequentialBackbone(nn.Module):
         solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
-        initialization: str = "default",
-        init_variance: float | None = None,
+        initialization: dict | None = None,  # Changed back to 'initialization', type is dict
         residual: bool = False,
         res_scale: float = 1.0,
     ) -> None:
@@ -175,9 +207,7 @@ class EqPropSequentialBackbone(nn.Module):
             param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
                 Defaults to eqprop_utils.AdjustParams().
             eqprop_fn (str, optional): EqProp function type. Defaults to "centered".
-            initialization (str, optional): Weight initialization method. Defaults to "default".
-            init_variance (float | None, optional): Variance for gaussian initialization. Defaults to None.
-            amp_factor (float, optional): Amplification factor for the solver. Defaults to 1.0.
+            initialization (dict | None, optional): Initialization config dictionary. Defaults to None.
             residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
             res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
@@ -192,15 +222,21 @@ class EqPropSequentialBackbone(nn.Module):
         eqprop_utils.interleave.set_num_input(scale_input)
         eqprop_utils.interleave.set_num_output(scale_output)
 
-        if initialization == "orthogonal":
+        if initialization is None:
+            initialization = {"name": "default"}
+
+        init_name = initialization.get("name", "default")
+
+        if init_name == "orthogonal":
             for m in self.model.modules():
                 if isinstance(m, nn.Linear):
                     nn.init.orthogonal_(m.weight)
                     if m.bias is not None:
                         nn.init.constant_(m.bias, 0)
-        elif initialization == "gaussian":
+        elif init_name == "gaussian":
+            init_variance = initialization.get("variance")
             if init_variance is None:
-                raise ValueError("init_variance must be specified for gaussian initialization.")
+                raise ValueError("'variance' must be specified in initialization config for gaussian.")
             print(f"DEBUG: Initializing EqPropSequentialBackbone with gaussian, init_variance={init_variance}")
             for i, m in enumerate(self.model.modules()):
                 if isinstance(m, nn.Linear):
@@ -209,6 +245,15 @@ class EqPropSequentialBackbone(nn.Module):
                     print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
                     if m.bias is not None:
                         nn.init.constant_(m.bias, 0)
+        elif init_name == "mup":
+            mup_width = initialization.get("width")
+            mup_depth = initialization.get("depth")
+            init_variance = initialization.get("variance", 1.0) # Default variance to 1.0 if not provided
+
+            if mup_width is None or mup_depth is None:
+                raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
+            
+            mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
 
     @staticmethod
     def _make_layers(cfg, bias):

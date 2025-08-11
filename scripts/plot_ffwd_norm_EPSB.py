@@ -40,29 +40,35 @@ def main(cfg: DictConfig) -> None:
             }
         },
         {
-            "name": "NewtonStrategy",
-            "config": {
-                "_target_": "src.core.eqprop.strategy.NewtonStrategy",
-                "activation": {"_target_": "src.core.eqprop.activation.P3OTS"} # Use P3OTS as per its default config
-            }
-        },
-        {
             "name": "ProxQPStrategy",
             "config": {
                 "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
                 "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
             }
         }
+        #{
+        #    "name": "NewtonStrategy",
+        #    "config": {
+        #        "_target_": "src.core.eqprop.strategy.NewtonStrategy",
+        #        "activation": {"_target_": "src.core.eqprop.activation.P3OTS"} # Use P3OTS as per its default config
+        #    }
+        #}
+        
     ]
-    initializations_to_test = ["orthogonal", "default"]
+    initializations_to_test = [
+        {"name": "orthogonal"},
+        {"name": "default"},
+        #{"name": "gaussian", "variance": 0.0078125}, # 1/128
+        {"name": "mup", "width": 128, "depth": 3, "variance": 1.0}
+    ]
 
     # --- Loop through every combination of strategy and initialization ---
     for strategy_info in strategies_to_test:
-        for init_method in initializations_to_test:
+        for init_method_dict in initializations_to_test:
             
             # Create a new figure for each combination
+            print(f"\n--- Processing Combination: strategy={strategy_info['name']}, init={init_method_dict['name']} ---")
             plt.figure(figsize=(12, 8))
-            print(f"\n--- Processing Combination: strategy={strategy_info['name']}, init={init_method} ---")
 
             l1_norms_at_l1 = []
             l1_norms_at_l_quarter = []
@@ -92,7 +98,7 @@ def main(cfg: DictConfig) -> None:
                     strategy_cfg = OmegaConf.create(strategy_info["config"])
                     
                     # Add debugging parameters for ProxQPStrategy with default init
-                    if strategy_info['name'] == "ProxQPStrategy" and init_method == "default":
+                    if strategy_info['name'] == "ProxQPStrategy" and init_method_dict['name'] == "default":
                         strategy_cfg.verbose = True
                         strategy_cfg.max_iter = 5000 # Increase max_iter significantly
                     
@@ -101,7 +107,7 @@ def main(cfg: DictConfig) -> None:
 
                     net_params = {
                         "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
-                        "initialization": init_method,
+                        "initialization": init_method_dict, # Pass the dictionary directly
                         "solver": solver_config,
                         "bias": [True] * (depth + 1)
                     }
@@ -165,7 +171,7 @@ def main(cfg: DictConfig) -> None:
             # --- Finalize Plot for the current combination ---
             plt.xlabel("Network Depth (L)", fontsize=14)
             plt.ylabel("Mean L1 Norm of Activity", fontsize=14)
-            plt.title(f"Feedforward Pass Stability (strategy={strategy_info['name']}, init={init_method})", fontsize=16)
+            plt.title(f"Feedforward Pass Stability (strategy={strategy_info['name']}, init={init_method_dict['name']})", fontsize=16)
             plt.xscale('log')
             plt.yscale('linear')
             plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
@@ -174,9 +180,9 @@ def main(cfg: DictConfig) -> None:
             
             save_dir = f"plotting/ffwd_activity_norm/EPSB_strategies/"
             os.makedirs(save_dir, exist_ok=True)
-            save_path = f"{save_dir}{strategy_info['name']}_{init_method}.png"
+            save_path = f"{save_dir}{strategy_info['name']}_{init_method_dict['name']}.png"
             plt.savefig(save_path)
-            print(f"\nPlot for {strategy_info['name']} with {init_method} init saved to {save_path}")
+            print(f"\nPlot for {strategy_info['name']} with {init_method_dict['name']} init saved to {save_path}")
             plt.close()
 
 if __name__ == "__main__":

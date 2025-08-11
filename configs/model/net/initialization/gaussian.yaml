@@ -1,2 +1,3 @@
-initialization: gaussian
-init_variance: 1.0
+initialization:
+  name: gaussian
+  variance: 0.0078125 # 1/128

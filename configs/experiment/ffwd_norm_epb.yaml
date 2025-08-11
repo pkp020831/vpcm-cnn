@@ -44,15 +44,15 @@ model:
         activation:
           _target_: src.core.eqprop.activation.IdealRectifier
 
-seed: 12345
+seed: 12347
 
 # Analysis-specific parameters
 analysis:
   input_size: 784
   output_size: 10
-  width: 128
+  width: 8
   depths: [8, 16, 32, 64, 128, 256, 512]
-  n_seeds: 10
+  n_seeds: 1
   # Combinations of parameters to plot
   param_combinations:
     - name: "orthogonal"

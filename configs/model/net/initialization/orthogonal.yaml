@@ -1,1 +1,2 @@
-initialization: orthogonal
+initialization:
+  name: orthogonal

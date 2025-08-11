@@ -1,0 +1,5 @@
+initialization:
+  name: mup
+  variance: 1.0
+  width: 128
+  depth: 3

@@ -1,1 +1,2 @@
-initialization: default
+initialization:
+  name: default
