@@ -137,7 +137,7 @@ class AdvLoggerCallback(Callback):
             #     metrics[layer_name + "condition_number"] = torch.linalg.cond(value)
             # self.log_scalars(metrics, layer_name, step, key_suffix, **kwargs)
         # phasewise
-        if self.log_optn["minimize"]:
+        if self.log_optn["minimize"] and hasattr(net, "metric_handler"):
             handler = net.metric_handler
             # for _ in self.num_phases:
             for key, val in handler.metrics.items():
