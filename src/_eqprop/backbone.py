@@ -36,9 +36,9 @@ def mup_initialization(model, width, depth, variance=1.0):
             if i == 0:  # Input layer
                 layer.weight.data *= math.sqrt(1 / 1568)
             elif i == num_layers - 1:  # Output layer
-                layer.weight.data *= math.sqrt(width)
+                layer.weight.data *= math.sqrt(1 / width)
             else:  # Hidden layer
-                layer.weight.data *= math.sqrt(width * depth)
+                layer.weight.data *= math.sqrt(1 / width / depth)
 
 
 class MultiplyActivation(nn.Module):
