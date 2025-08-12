@@ -36,10 +36,10 @@ model:
     factor: 0.1
     patience: 10
   net:
-    _target_: src._eqprop.backbone.EqPropBackbone #EqPropBackbone
-    _allow_new_keys: true
+    _target_: src._eqprop.backbone.EqPropSequentialBackbone
     bias: True
-    initialization: default
+    initialization: default # This will be overridden by the script
+    mup_variance: 1.0 # Default variance for muP
 callbacks:
   model_checkpoint:
     _target_: lightning.pytorch.callbacks.ModelCheckpoint
