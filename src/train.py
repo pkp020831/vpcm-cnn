@@ -111,6 +111,12 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         wandb.finish()
 
     # Explicitly clean up memory for multiruns
+    if trainer.logger is not None:
+        if hasattr(trainer.logger, "finalize"):
+            trainer.logger.finalize("finished")
+        trainer.logger = None
+    trainer.callbacks.clear()
+
     del model
     del datamodule
     del trainer
