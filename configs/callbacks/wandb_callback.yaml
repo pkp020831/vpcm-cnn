@@ -1,0 +1,3 @@
+wandb_logger_callback:
+  _target_: src.utils.pycallbacks.WandbLoggerCallback
+  log_freq: "epoch"  # "epoch" or an integer for step frequency

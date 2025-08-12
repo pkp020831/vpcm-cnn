@@ -240,10 +240,11 @@ import wandb
 class WandbLoggerCallback(AdvLoggerCallback):
     # log directly from wandb
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, log_freq: str = "epoch", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.log_optn["histogram"] = False
         project = kwargs.get("project", None)
+        self.log_freq = log_freq
         # wandb.init(project=project)
 
     def on_sanity_check_start(self, trainer: Trainer, pl_module: L.LightningModule) -> None:
@@ -260,7 +261,13 @@ class WandbLoggerCallback(AdvLoggerCallback):
         """
         # assert type(pl_module.logger) is WandbLogger, "W&B logger not found"
         self.logger = WandbLogger() if self.logger is None else self.logger
-        self.logger.watch(pl_module, log="all", log_graph=False)
+
+        log_freq_steps = self.log_freq
+        if self.log_freq == "epoch":
+            # Calculate the number of steps in one epoch
+            log_freq_steps = len(trainer.train_dataloader)
+        
+        self.logger.watch(pl_module, log="all", log_freq=log_freq_steps, log_graph=False)
 
     def log_histogram(self, key, data, step: int = None, key_suffix: str = "", **kwargs):
         """Log the histogram of the data."""
@@ -311,3 +318,16 @@ class WandbLoggerCallback(AdvLoggerCallback):
     #     # if self.log_optn['Vdrops']:
     #     #     self.log_Vdrops(pl_module.fdV, step, key_prefix='free',  key_suffix=key_suffix, **kwargs)
     #     #     self.log_Vdrops(pl_module.ndV, step, key_prefix='nudge', key_suffix=key_suffix, **kwargs)
+
+
+import gc
+
+
+class MemoryOptimizerCallback(Callback):
+    """Callback to free up memory at the end of each training epoch."""
+
+    def on_train_epoch_end(self, trainer: Trainer, pl_module: L.LightningModule) -> None:
+        """Hook to run at the end of a training epoch."""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
