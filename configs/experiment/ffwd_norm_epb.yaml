@@ -51,7 +51,7 @@ analysis:
   output_size: 10
   width: 8
   depths: [8, 16, 32, 64, 128, 256]
-  n_seeds: 10
+  n_seeds: 1
   # Combinations of parameters to plot
   param_combinations:
     - name: "orthogonal"
