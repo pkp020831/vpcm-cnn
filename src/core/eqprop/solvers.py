@@ -39,6 +39,15 @@ class EqPropSolver:
         self.amp_factor = amp_factor
         self.beta = beta
         self.strategy = strategy
+        self.shortcuts: list[tuple[int, int, float]] | None = None
+
+    def set_shortcuts(self, shortcuts: list[tuple[int, int, float]] | None) -> None:
+        """Set shortcut information for the solver and its strategy."""
+        self.shortcuts = shortcuts
+        if hasattr(self.strategy, "set_shortcuts"):
+            self.strategy.set_shortcuts(shortcuts)
+        else:
+            log.warning(f"Strategy {type(self.strategy).__name__} does not have a set_shortcuts method.")
 
     @property
     def beta(self):

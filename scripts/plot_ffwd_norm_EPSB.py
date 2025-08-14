@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
         {"name": "orthogonal"},
         {"name": "default"},
         #{"name": "gaussian", "variance": 0.0078125}, # 1/128
-        {"name": "mup", "width": 128, "depth": 0, "variance": 1.0}
+        {"name": "mup", "width": 8, "depth": 0, "variance": 1.0}
     ]
 
     # --- Loop through every combination of strategy and initialization ---
@@ -115,15 +115,17 @@ def main(cfg: DictConfig) -> None:
 
                     net_params = {
                         "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
-                        "initialization": init_config, # Pass the dynamically updated dictionary
+                        "initialization": init_config,  # Pass the dynamically updated dictionary
                         "solver": solver_config,
-                        "bias": [True] * (depth + 1)
+                        "bias": [True] * (depth + 1),
+                        "res_scale": 1.0  # Use a default scale of 1.0 for the test
                     }
-                    
+
+                    # Target the new AdjacentShortcutBackbone which handles shortcuts automatically
                     net_config = OmegaConf.create(cfg.model.net)
-                    net_config._target_ = "src._eqprop.backbone.EqPropSequentialBackbone"
+                    net_config._target_ = "src._eqprop.backbone.AdjacentShortcutBackbone"
                     net_config.update(net_params)
-                    
+
                     net = hydra.utils.instantiate(net_config)
                     model: LightningModule = hydra.utils.instantiate(cfg.model, net=net)
 

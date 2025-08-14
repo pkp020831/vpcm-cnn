@@ -47,9 +47,9 @@ hydra:
     params:
       #eqprop
       # EqProp-specific parameters
-      model.net.beta: tag(interval(0.5,10))
-      model.net.solver.amp_factor: 1.375
-      model.optimizer.lr: tag(interval(0.0005,0.01))
+      model.net.beta: 1
+      model.net.solver.amp_factor: 1.35
+      model.optimizer.lr: 0.003
       data.batch_size: 64
       trainer.min_epochs: 5
       trainer.max_epochs: 5

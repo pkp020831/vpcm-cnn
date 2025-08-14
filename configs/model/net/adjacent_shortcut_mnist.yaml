@@ -1,0 +1,12 @@
+# @package model.net
+# Inherits from ep_mnist for cfg, etc.
+defaults:
+  - ep_mnist
+  - _self_
+
+# Target the new backbone. No 'shortcuts' option needed.
+_target_: src._eqprop.backbone.AdjacentShortcutBackbone
+
+# Optionally, you can set the base scale for the shortcuts here.
+# If not set, it will default to 1.0 as defined in the class __init__.
+res_scale: 1.0

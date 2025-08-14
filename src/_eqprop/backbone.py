@@ -36,7 +36,7 @@ def mup_initialization(model, width, depth, variance=1.0):
             if i == 0:  # Input layer
                 layer.weight.data *= math.sqrt(1 / 1568)
             elif i == num_layers - 1:  # Output layer
-                layer.weight.data *= math.sqrt(1 / width)
+                layer.weight.data *= 1 / width
             else:  # Hidden layer
                 layer.weight.data *= math.sqrt(1 / width / depth)
 
@@ -409,3 +409,194 @@ class GroupedHybridBackbone(EqPropBackbone):
                 )
 
         return overall_layers_list
+
+class ResidualEqPropBackbone(nn.Module):
+    def __init__(
+        self,
+        cfg: list[int] = [784 * 2, 128, 10 * 2],
+        beta: float = 0.1,
+        bias: bool | list[bool] = [True, True],
+        scale_input: int = 2,
+        scale_output: int = 2,
+        solver: eqprop.solvers.EqPropSolver | None = None,
+        param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
+        eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
+        initialization: dict | None = None,
+        shortcuts: list[tuple[int, int, float]] | None = None,
+    ) -> None:
+        """Initialize ResidualEqPropBackbone.
+
+        Args:
+            cfg (list[int], optional): Configuration of layers. Defaults to [784 * 2, 128, 10 * 2].
+            bias (bool | list[bool], optional): Bias for each layer. Defaults to [True, False].
+            scale_input (int, optional): Scale input. Defaults to 2.
+            scale_output (int, optional): Scale output. Defaults to 2.
+            solver (Optional[EqPropSolver], optional): Solver for EqProp. Defaults to None.
+            param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
+                Defaults to eqprop_utils.AdjustParams().
+            eqprop_fn (str, optional): EqProp function type. Defaults to "centered".
+            initialization (dict | None, optional): Initialization config dictionary. Defaults to None.
+            shortcuts (list[tuple[int, int, float]] | None, optional): List of shortcuts. 
+                Each tuple is (from_layer, to_layer, scale). Defaults to None.
+        """
+        super().__init__()
+        
+        if solver and shortcuts:
+            if hasattr(solver, "set_shortcuts"):
+                solver.set_shortcuts(shortcuts)
+            else:
+                raise AttributeError("The provided solver does not have a 'set_shortcuts' method.")
+
+        self.model = enn.EqPropSequential(
+            *self._make_layers(cfg, bias),
+            eqprop_fn=eqprop_fn,
+            solver=solver,
+        )
+        self.param_adjuster = param_adjuster
+        eqprop_utils.interleave.set_num_input(scale_input)
+        eqprop_utils.interleave.set_num_output(scale_output)
+
+        if initialization is None:
+            initialization = {"name": "default"}
+
+        init_name = initialization.get("name", "default")
+
+        if init_name == "orthogonal":
+            for m in self.model.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif init_name == "gaussian":
+            init_variance = initialization.get("variance")
+            if init_variance is None:
+                raise ValueError("'variance' must be specified in initialization config for gaussian.")
+            print(f"DEBUG: Initializing EqPropSequentialBackbone with gaussian, init_variance={init_variance}")
+            for i, m in enumerate(self.model.modules()):
+                if isinstance(m, nn.Linear):
+                    std = init_variance**0.5
+                    nn.init.normal_(m.weight, mean=0.0, std=std)
+                    print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif init_name == "mup":
+            mup_width = initialization.get("width")
+            mup_depth = initialization.get("depth")
+            init_variance = initialization.get("variance", 1.0) # Default variance to 1.0 if not provided
+
+            if mup_width is None or mup_depth is None:
+                raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
+            
+            mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
+
+    @staticmethod
+    def _make_layers(cfg, bias):
+        layers = []
+        for idx in range(len(cfg) - 1):
+            bias_idx = bias if isinstance(bias, bool) else bias[idx]
+            layers.append(
+                enn.EqPropLinear(
+                    cfg[idx],
+                    cfg[idx + 1],
+                    bias=bias_idx,
+                )
+            )
+        return layers
+
+    @eqprop_utils.interleave(type="both")
+    def forward(self, x, return_all_activities: bool = False):
+        if self.param_adjuster is not None:
+            self.model.apply(self.param_adjuster)
+        return self.model(x, return_all_activities=return_all_activities)
+
+class AdjacentShortcutBackbone(nn.Module):
+    def __init__(
+        self,
+        cfg: list[int] = [784 * 2, 128, 10 * 2],
+        beta: float = 0.1,
+        bias: bool | list[bool] = [True, True],
+        scale_input: int = 2,
+        scale_output: int = 2,
+        solver: eqprop.solvers.EqPropSolver | None = None,
+        param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
+        eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
+        initialization: dict | None = None,
+        res_scale: float = 1.0,
+    ) -> None:
+        super().__init__()
+
+        if solver:
+            # Automatically generate shortcuts for adjacent HIDDEN layers
+            num_layers = len(cfg) - 1
+            # We only want to connect hidden layers, so we loop up to the second to last layer.
+            # The last connection (last hidden -> output) is excluded.
+            num_hidden_connections = num_layers - 2
+            adjacent_shortcuts = []
+            if num_hidden_connections > 0:
+                for i in range(num_hidden_connections):
+                    adjacent_shortcuts.append((i, i + 1, res_scale))
+
+            if hasattr(solver, "set_shortcuts"):
+                solver.set_shortcuts(adjacent_shortcuts)
+            else:
+                raise AttributeError("The provided solver does not have a 'set_shortcuts' method.")
+
+        self.model = enn.EqPropSequential(
+            *self._make_layers(cfg, bias),
+            eqprop_fn=eqprop_fn,
+            solver=solver,
+        )
+        self.param_adjuster = param_adjuster
+        eqprop_utils.interleave.set_num_input(scale_input)
+        eqprop_utils.interleave.set_num_output(scale_output)
+
+        if initialization is None:
+            initialization = {"name": "default"}
+
+        init_name = initialization.get("name", "default")
+
+        if init_name == "orthogonal":
+            for m in self.model.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.orthogonal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif init_name == "gaussian":
+            init_variance = initialization.get("variance")
+            if init_variance is None:
+                raise ValueError("'variance' must be specified in initialization config for gaussian.")
+            for i, m in enumerate(self.model.modules()):
+                if isinstance(m, nn.Linear):
+                    std = init_variance**0.5
+                    nn.init.normal_(m.weight, mean=0.0, std=std)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+        elif init_name == "mup":
+            mup_width = initialization.get("width")
+            mup_depth = initialization.get("depth")
+            init_variance = initialization.get("variance", 1.0)
+
+            if mup_width is None or mup_depth is None:
+                raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
+            
+            mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
+
+    @staticmethod
+    def _make_layers(cfg, bias):
+        layers = []
+        for idx in range(len(cfg) - 1):
+            bias_idx = bias if isinstance(bias, bool) else bias[idx]
+            layers.append(
+                enn.EqPropLinear(
+                    cfg[idx],
+                    cfg[idx + 1],
+                    bias=bias_idx,
+                )
+            )
+        return layers
+
+    @eqprop_utils.interleave(type="both")
+    def forward(self, x, return_all_activities: bool = False):
+        if self.param_adjuster is not None:
+            self.model.apply(self.param_adjuster)
+        return self.model(x, return_all_activities=return_all_activities)

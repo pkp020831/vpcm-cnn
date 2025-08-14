@@ -100,6 +100,11 @@ class AbstractStrategy(ABC):
         self.dims = []
         self.W = []
         self.B = []
+        self.shortcuts: list[tuple[int, int, float]] | None = None
+
+    def set_shortcuts(self, shortcuts: list[tuple[int, int, float]] | None) -> None:
+        """Set shortcut information for the strategy."""
+        self.shortcuts = shortcuts
 
     @abstractmethod
     def solve(self, x, i_ext, **kwargs) -> torch.Tensor:
@@ -306,19 +311,52 @@ class FirstOrderStrategy(PythonStrategy):
         """
         dims = self.dims
         size = sum(dims)
+        total_network_depth = len(self.dims)
 
-        # Create padded weight matrices for lower triangular part only
+        to_layer_base_scales = {to_idx: scale for from_idx, to_idx, scale in self.shortcuts} if self.shortcuts else {}
+
+        # 1. Build the sequential connections, applying depth-based scaling
         paddedG = [torch.zeros(dims[0], size).type_as(self.W[0])]
         for i, g in enumerate(self.W[1:]):
+            layer_idx = i + 1
+            
+            final_scale = 1.0
+            if layer_idx in to_layer_base_scales:
+                base_scale = to_layer_base_scales[layer_idx]
+                if total_network_depth > 0:
+                    final_scale = base_scale / (total_network_depth**0.5)
+
             # Calculate padding sizes
             left_pad = sum(dims[:i])
             right_pad = sum(dims[1 + i :])
             # Pad each weight matrix to fit in the full-size matrix
-            padded = F.pad(-g, (left_pad, right_pad))
+            padded = F.pad(-g * final_scale, (left_pad, right_pad))
             paddedG.append(padded)
 
         # Construct lower triangular part
         Ll = torch.cat(paddedG, dim=-2)
+
+        # 2. Add unscaled identity connections for the shortcut path `x`
+        if self.shortcuts is not None:
+            for from_idx, to_idx, scale in self.shortcuts:
+                if from_idx >= to_idx:
+                    raise ValueError(f"Shortcut 'from' index ({from_idx}) must be smaller than 'to' index ({to_idx}).")
+                if dims[from_idx] != dims[to_idx]:
+                    raise ValueError(f"Shortcut dimensions must match: from_layer {from_idx} (dim={dims[from_idx]}) -> to_layer {to_idx} (dim={dims[to_idx]})")
+
+                # Get the start and end indices for the rows (to_layer)
+                row_start = sum(dims[:to_idx])
+                row_end = row_start + dims[to_idx]
+
+                # Get the start and end indices for the columns (from_layer)
+                col_start = sum(dims[:from_idx])
+                col_end = col_start + dims[from_idx]
+                
+                # The shortcut connection is unscaled (identity)
+                identity_block = -torch.eye(dims[from_idx], device=Ll.device, dtype=Ll.dtype)
+                
+                # Add the block to the Ll matrix
+                Ll[row_start:row_end, col_start:col_end] += identity_block
 
         return Ll
 
