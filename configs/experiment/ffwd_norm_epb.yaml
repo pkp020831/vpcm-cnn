@@ -28,7 +28,7 @@ model:
     _partial_: true
     mode: "min"
   net:
-    _target_: src._eqprop.backbone.AdjacentEqPropBackbone
+    _target_: src._eqprop.backbone.AdjacentShortcutBackbone
     beta: 1.5
 
     
