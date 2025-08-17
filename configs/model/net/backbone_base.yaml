@@ -7,7 +7,7 @@ defaults:
 
 _target_: src._eqprop.EqPropBackbone
 beta: 1.5
-bias: true
+bias: false
 scale_input: 2
 scale_output: 2
 cfg: ???
@@ -17,5 +17,5 @@ param_adjuster:
   _target_: src.utils.eqprop_utils.AdjustParams
 
 #residual: false # Add this line for residual control
-#res_scale: 1
+#res_scale: 4
 #layer_scale: 1

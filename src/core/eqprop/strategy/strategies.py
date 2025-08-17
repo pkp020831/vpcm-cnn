@@ -997,64 +997,75 @@ class ResistiveNetworkStrategy(FirstOrderStrategy):
         if self.B and layer_idx < len(self.B):
             b += self.B[layer_idx].unsqueeze(0).expand(batch_size, -1)
 
+        # Get the res_scale for the current layer's incoming weights
+        res_scale = 1.0  # Default to 1 if no shortcut is defined
+        if self.shortcuts is not None:
+            for from_idx, to_idx, scale in self.shortcuts:
+                if to_idx == layer_idx:
+                    res_scale = scale
+                    break
+
         # Connection to previous layer (this layer is post-synaptic)
         if layer_idx == 0:
-            # First layer connects to input
-            # Energy: E = 0.5 * Σ((x - z_0)² * W_0)
-            # For z_0: a = 0.5 * Σ(W_0), b = -Σ(x * W_0)
-            weight = self.W[0]  # Shape: (layer_dim, input_dim)
-            a += 0.5 * weight.sum(dim=1).unsqueeze(0)  # Shape: (1, layer_dim)
+            # First layer connects to input, not scaled by res_scale
+            weight = self.W[0]
+            a += 0.5 * weight.sum(dim=1).unsqueeze(0)
             b -= torch.matmul(x, weight.T)
         else:
-            # Hidden layer connects to previous layer
-            # Energy: E = 0.5 * Σ((z_prev - z_curr)² * W_layer)
-            # For z_curr: a = 0.5 * Σ(W_layer), b = -Σ(z_prev * W_layer)
-            weight = self.W[layer_idx]  # Shape: (layer_dim, prev_dim)
-            a += 0.5 * weight.sum(dim=1).unsqueeze(0)  # Shape: (1, layer_dim)
+            # Hidden layer connects to previous layer, scaled by res_scale
+            weight = self.W[layer_idx] * res_scale
+            a += 0.5 * weight.sum(dim=1).unsqueeze(0)
             b -= torch.matmul(self._layer_states[layer_idx - 1], weight.T)
 
         # Connection to next layer (this layer is pre-synaptic)
         if layer_idx < len(self.dims) - 1:
-            # This layer connects to next layer
-            # Energy: E = 0.5 * Σ((z_curr - z_next)² * W_next)
-            # For z_curr: a = 0.5 * Σ(W_next), b = -Σ(z_next * W_next)
-            weight = self.W[layer_idx + 1]  # Shape: (next_dim, layer_dim)
-            a += 0.5 * weight.sum(dim=0).unsqueeze(0)  # Shape: (1, layer_dim)
+            # The connection *from* this layer *to* the next uses the next layer's res_scale
+            next_res_scale = 1.0
+            if self.shortcuts is not None:
+                for from_idx, to_idx, scale in self.shortcuts:
+                    if to_idx == layer_idx + 1:
+                        next_res_scale = scale
+                        break
+            weight = self.W[layer_idx + 1] * next_res_scale
+            a += 0.5 * weight.sum(dim=0).unsqueeze(0)
             b -= torch.matmul(self._layer_states[layer_idx + 1], weight)
+
+        # Add identity shortcut connection if it exists
+        if self.shortcuts is not None:
+            for from_idx, to_idx, scale in self.shortcuts:
+                if to_idx == layer_idx and from_idx == layer_idx - 1:
+                    identity_scale = 1.0  # Use a fixed scale of 1.0 for the identity part
+                    z_prev = self._layer_states[from_idx]
+                    # Energy term: 0.5 * identity_scale * (z_prev - z_curr)^2
+                    # This adds 0.5 * identity_scale to 'a' and -identity_scale * z_prev to 'b'
+                    a += 0.5 * identity_scale
+                    b -= identity_scale * z_prev
+                    break  # Assume only one adjacent shortcut
 
         # Add external current for nudged phase (output layer only)
         if i_ext is not None and layer_idx == len(self.dims) - 1:
-            # For output layer, i_ext should match the layer dimension
             if i_ext.shape[1] == layer_dim:
                 b += i_ext
             else:
-                # If i_ext is for full network, slice the output portion
                 start_idx = sum(self.dims[:layer_idx])
                 end_idx = start_idx + layer_dim
                 b += i_ext[:, start_idx:end_idx]
 
         # Analytical solution: z = -b / (2 * a)
-        # Add small epsilon to avoid division by zero
         a = torch.clamp(a, min=1e-12)
         z_new = -b / (2.0 * a)
 
         # Apply activation constraints
-        # Only apply differential pair activation to hidden layers, not output layer
         is_output_layer = layer_idx == len(self.dims) - 1
-
         if hasattr(self.activation, "get_box_constraints") and not is_output_layer:
-            # Apply differential pair clamping for hidden layers only
             if self.dims[layer_idx] % 2 != 0:
                 raise ValueError(f"Layer {layer_idx} must have even nodes for differential pairs")
-
             half_dim = self.dims[layer_idx] // 2
-            z_new[:, :half_dim] = z_new[:, :half_dim].clamp(min=0.0)  # First half: excitatory ≥ 0
-            z_new[:, half_dim:] = z_new[:, half_dim:].clamp(max=0.0)  # Second half: inhibitory ≤ 0
+            z_new[:, :half_dim] = z_new[:, :half_dim].clamp(min=0.0)
+            z_new[:, half_dim:] = z_new[:, half_dim:].clamp(max=0.0)
         else:
-            # Apply traditional activation bounds for output layer or non-differential pair activations
             if hasattr(self.activation, "Vl") and hasattr(self.activation, "Vr"):
                 z_new = torch.clamp(z_new, min=self.activation.Vl, max=self.activation.Vr)
-            # For output layer with differential pairs, no clamping is applied (linear layer behavior)
 
         return z_new
 

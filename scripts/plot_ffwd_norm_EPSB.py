@@ -32,13 +32,14 @@ def main(cfg: DictConfig) -> None:
 
     # Define the strategies and initializations to test
     strategies_to_test = [
-        #{
-        #    "name": "ResistiveNetworkStrategy",
-        #    "config": {
-        #        "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
-        #        "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
-        #    }
-        #},
+        {
+            "name": "ResistiveNetworkStrategy",
+            "config": {
+                "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
+                "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
+                "num_iterations": 60
+            }
+        },
         {
             "name": "ProxQPStrategy",
             "config": {
@@ -84,7 +85,7 @@ def main(cfg: DictConfig) -> None:
                 layer_idx_l_quarter = min(depth, max(1, int(depth / 4)))
                 layer_idx_l_half = min(depth, max(1, int(depth / 2)))
                 layer_idx_l_three_quarter = min(depth, max(1, int(3 * depth / 4)))
-                layer_idx_l_full = depth
+                layer_idx_l_full = depth - 1
 
                 norms_for_current_depth = {"l1": [], "l_quarter": [], "l_half": [], "l_three_quarter": [], "l_full": []}
 
@@ -113,12 +114,17 @@ def main(cfg: DictConfig) -> None:
                     # Override the default strategy with our specific one
                     solver_config.strategy = strategy_cfg
 
+                    # Dynamically calculate res_scale based on the formula
+                    base_res_scale = cfg.model.net.res_scale
+                    L = depth + 1
+                    scaled_res_scale = float(base_res_scale / np.sqrt(L))
+
                     net_params = {
                         "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
                         "initialization": init_config,  # Pass the dynamically updated dictionary
                         "solver": solver_config,
-                        "bias": [True] * (depth + 1),
-                        "res_scale": 1.0  # Use a default scale of 1.0 for the test
+                        "bias": False, #[True] * (depth + 1),
+                        "res_scale": scaled_res_scale
                     }
 
                     # Target the new AdjacentShortcutBackbone which handles shortcuts automatically
@@ -169,8 +175,8 @@ def main(cfg: DictConfig) -> None:
                       f"            l=L/4: {mean_l_quarter:.4f}\n" \
                       f"            l=L/2: {mean_l_half:.4f}\n" \
                       f"            l=3L/4: {mean_l_three_quarter:.4f}\n" \
-                      f"            l=L: {mean_l_full:.4f}")
-            
+                      f"            l=L: {mean_l_full:.4f}\n")
+
             # Plot results for the current combination
             plt.plot(cfg.analysis.depths, l1_norms_at_l1, marker='o', linestyle='-', label='l=1')
             plt.plot(cfg.analysis.depths, l1_norms_at_l_quarter, marker='x', linestyle='--', label='l=L/4')
