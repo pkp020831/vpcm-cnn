@@ -53,7 +53,7 @@ hydra:
       data.batch_size: 64
       trainer.min_epochs: 3
       trainer.max_epochs: 3
-      model.net.res_scale: tag(log,interval(0.01,10))
+      model.net.res_scale: 1
       logger.wandb.offline: false
       #model.net.layer_scale: 1
 

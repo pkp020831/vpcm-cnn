@@ -28,11 +28,8 @@ model:
     _partial_: true
     mode: "min"
   net:
-    _target_: src._eqprop.backbone.AdjacentShortcutBackbone
     beta: 1.5
-    res_scale: 0
-
-    
+    res_scale: 0.5
     solver:
       _target_: src.core.eqprop.solvers.EqPropSolver
       amp_factor: 0
@@ -51,7 +48,7 @@ analysis:
   input_size: 784
   output_size: 10
   width: 8
-  depths: [8, 16, 32, 64, 128, 256]
+  depths: [8, 16, 32, 64, 128, 256, 512]
   n_seeds: 3
   # Combinations of parameters to plot
   param_combinations:

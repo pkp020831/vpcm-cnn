@@ -30,7 +30,19 @@ def main(cfg: DictConfig) -> None:
     
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
-    # Define the strategies and initializations to test
+    # Define the backbones, strategies, and initializations to test
+    backbones_to_test = [
+        {
+            "name": "AdjacentShortcutBackbone",
+            "target": "src._eqprop.backbone.AdjacentShortcutBackbone",
+            "title_name": "with Identity shortcut"
+        },
+        {
+            "name": "EqPropSequentialBackbone",
+            "target": "src._eqprop.backbone.EqPropSequentialBackbone",
+            "title_name": "without Identity shortcut"
+        }
+    ]
     strategies_to_test = [
         {
             "name": "ResistiveNetworkStrategy",
@@ -64,142 +76,147 @@ def main(cfg: DictConfig) -> None:
         {"name": "mup", "width": 8, "depth": 0, "variance": 1.0}
     ]
 
-    # --- Loop through every combination of strategy and initialization ---
-    for strategy_info in strategies_to_test:
-        for init_method_dict in initializations_to_test:
-            
-            # Create a new figure for each combination
-            print(f"\n--- Processing Combination: strategy={strategy_info['name']}, init={init_method_dict['name']} ---")
-            plt.figure(figsize=(12, 8))
-
-            l1_norms_at_l1 = []
-            l1_norms_at_l_quarter = []
-            l1_norms_at_l_half = []
-            l1_norms_at_l_three_quarter = []
-            l1_norms_at_l_full = []
-
-            for depth in cfg.analysis.depths:
-                print(f"    Testing Depth (L): {depth}")
+    # --- Loop through every combination of backbone, strategy, and initialization ---
+    for backbone_info in backbones_to_test:
+        for strategy_info in strategies_to_test:
+            for init_method_dict in initializations_to_test:
                 
-                layer_idx_l1 = 1
-                layer_idx_l_quarter = min(depth, max(1, int(depth / 4)))
-                layer_idx_l_half = min(depth, max(1, int(depth / 2)))
-                layer_idx_l_three_quarter = min(depth, max(1, int(3 * depth / 4)))
-                layer_idx_l_full = depth - 1
+                # Create a new figure for each combination
+                print(f"\n--- Processing Combination: backbone={backbone_info['name']}, strategy={strategy_info['name']}, init={init_method_dict['name']} ---")
+                plt.figure(figsize=(12, 8))
 
-                norms_for_current_depth = {"l1": [], "l_quarter": [], "l_half": [], "l_three_quarter": [], "l_full": []}
+                l1_norms_at_l1 = []
+                l1_norms_at_l_quarter = []
+                l1_norms_at_l_half = []
+                l1_norms_at_l_three_quarter = []
+                l1_norms_at_l_full = []
 
-                for seed in range(cfg.analysis.n_seeds):
-                    seed_everything(cfg.seed + seed)
+                for depth in cfg.analysis.depths:
+                    print(f"    Testing Depth (L): {depth}")
                     
-                    # --- Instantiate Model with current strategy and initialization ---
-                    # Create a mutable copy of the initialization config for the current depth
-                    init_config = init_method_dict.copy()
+                    layer_idx_l1 = 1
+                    layer_idx_l_quarter = min(depth, max(1, int(depth / 4)))
+                    layer_idx_l_half = min(depth, max(1, int(depth / 2)))
+                    layer_idx_l_three_quarter = min(depth, max(1, int(3 * depth / 4)))
+                    layer_idx_l_full = depth - 1
+
+                    norms_for_current_depth = {"l1": [], "l_quarter": [], "l_half": [], "l_three_quarter": [], "l_full": []}
+
+                    for seed in range(cfg.analysis.n_seeds):
+                        seed_everything(cfg.seed + seed)
+                        
+                        # --- Instantiate Model with current strategy and initialization ---
+                        # Create a mutable copy of the initialization config for the current depth
+                        init_config = init_method_dict.copy()
+                        
+                        # If using muP, dynamically set its depth to the current network depth
+                        if init_config['name'] == 'mup':
+                            init_config['depth'] = depth+1
+
+                        # Start with the base solver config from the main YAML
+                        solver_config = OmegaConf.create(cfg.model.net.solver)
+                        
+                        # Create a config for the specific strategy we are testing
+                        strategy_cfg = OmegaConf.create(strategy_info["config"])
+                        
+                        # Add debugging parameters for ProxQPStrategy with default init
+                        if strategy_info['name'] == "ProxQPStrategy" and init_method_dict['name'] == "default":
+                            strategy_cfg.verbose = True
+                            strategy_cfg.max_iter = 5000 # Increase max_iter significantly
+                        
+                        # Override the default strategy with our specific one
+                        solver_config.strategy = strategy_cfg
+
+                        # Dynamically calculate res_scale based on the formula
+                        base_res_scale = cfg.model.net.res_scale
+                        L = depth + 1
+                        scaled_res_scale = float(base_res_scale / np.sqrt(L))
+
+                        net_params = {
+                            "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
+                            "initialization": init_config,  # Pass the dynamically updated dictionary
+                            "solver": solver_config,
+                            "bias": True, #[True] * (depth + 1),
+                            "res_scale": scaled_res_scale
+                        }
+
+                        # Target the new AdjacentShortcutBackbone which handles shortcuts automatically
+                        net_config = OmegaConf.create(cfg.model.net)
+                        net_config._target_ = backbone_info["target"]
+                        net_config.update(net_params)
+
+                        net = hydra.utils.instantiate(net_config)
+                        model: LightningModule = hydra.utils.instantiate(cfg.model, net=net)
+
+                        all_layer_activities = run_forward_pass(model, datamodule)
+
+                        del model
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        gc.collect()
+                        
+                        if len(all_layer_activities) > layer_idx_l1:
+                            activity = all_layer_activities[layer_idx_l1]
+                            norms_for_current_depth["l1"].append(torch.mean(torch.abs(activity)).item())
+                        if len(all_layer_activities) > layer_idx_l_quarter:
+                            activity = all_layer_activities[layer_idx_l_quarter]
+                            norms_for_current_depth["l_quarter"].append(torch.mean(torch.abs(activity)).item())
+                        if len(all_layer_activities) > layer_idx_l_half:
+                            activity = all_layer_activities[layer_idx_l_half]
+                            norms_for_current_depth["l_half"].append(torch.mean(torch.abs(activity)).item())
+                        if len(all_layer_activities) > layer_idx_l_three_quarter:
+                            activity = all_layer_activities[layer_idx_l_three_quarter]
+                            norms_for_current_depth["l_three_quarter"].append(torch.mean(torch.abs(activity)).item())
+                        if len(all_layer_activities) > layer_idx_l_full:
+                            activity = all_layer_activities[layer_idx_l_full]
+                            norms_for_current_depth["l_full"].append(torch.mean(torch.abs(activity)).item())
                     
-                    # If using muP, dynamically set its depth to the current network depth
-                    if init_config['name'] == 'mup':
-                        init_config['depth'] = depth+1
+                    mean_l1 = np.mean(norms_for_current_depth["l1"]) if norms_for_current_depth["l1"] else np.nan
+                    mean_l_quarter = np.mean(norms_for_current_depth["l_quarter"]) if norms_for_current_depth["l_quarter"] else np.nan
+                    mean_l_half = np.mean(norms_for_current_depth["l_half"]) if norms_for_current_depth["l_half"] else np.nan
+                    mean_l_three_quarter = np.mean(norms_for_current_depth["l_three_quarter"]) if norms_for_current_depth["l_three_quarter"] else np.nan
+                    mean_l_full = np.mean(norms_for_current_depth["l_full"]) if norms_for_current_depth["l_full"] else np.nan
 
-                    # Start with the base solver config from the main YAML
-                    solver_config = OmegaConf.create(cfg.model.net.solver)
-                    
-                    # Create a config for the specific strategy we are testing
-                    strategy_cfg = OmegaConf.create(strategy_info["config"])
-                    
-                    # Add debugging parameters for ProxQPStrategy with default init
-                    if strategy_info['name'] == "ProxQPStrategy" and init_method_dict['name'] == "default":
-                        strategy_cfg.verbose = True
-                        strategy_cfg.max_iter = 5000 # Increase max_iter significantly
-                    
-                    # Override the default strategy with our specific one
-                    solver_config.strategy = strategy_cfg
+                    l1_norms_at_l1.append(mean_l1)
+                    l1_norms_at_l_quarter.append(mean_l_quarter)
+                    l1_norms_at_l_half.append(mean_l_half)
+                    l1_norms_at_l_three_quarter.append(mean_l_three_quarter)
+                    l1_norms_at_l_full.append(mean_l_full)
 
-                    # Dynamically calculate res_scale based on the formula
-                    base_res_scale = cfg.model.net.res_scale
-                    L = depth + 1
-                    scaled_res_scale = float(base_res_scale / np.sqrt(L))
+                    print(f"        Mean L1 Norms for Depth {depth}:\n" \
+                          f"            l=1: {mean_l1:.4f}\n" \
+                          f"            l=L/4: {mean_l_quarter:.4f}\n" \
+                          f"            l=L/2: {mean_l_half:.4f}\n" \
+                          f"            l=3L/4: {mean_l_three_quarter:.4f}\n" \
+                          f"            l=L: {mean_l_full:.4f}\n")
 
-                    net_params = {
-                        "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
-                        "initialization": init_config,  # Pass the dynamically updated dictionary
-                        "solver": solver_config,
-                        "bias": False, #[True] * (depth + 1),
-                        "res_scale": scaled_res_scale
-                    }
+                # Plot results for the current combination
+                plt.plot(cfg.analysis.depths, l1_norms_at_l1, marker='o', linestyle='-', label='l=1', linewidth=2.5)
+                plt.plot(cfg.analysis.depths, l1_norms_at_l_quarter, marker='x', linestyle='--', label='l=L/4', linewidth=2.5)
+                plt.plot(cfg.analysis.depths, l1_norms_at_l_half, marker='s', linestyle='-', label='l=L/2', linewidth=2.5)
+                plt.plot(cfg.analysis.depths, l1_norms_at_l_three_quarter, marker='D', linestyle='--', label='l=3L/4', linewidth=2.5)
+                plt.plot(cfg.analysis.depths, l1_norms_at_l_full, marker='^', linestyle='-', label='l=L', linewidth=2.5)
 
-                    # Target the new AdjacentShortcutBackbone which handles shortcuts automatically
-                    net_config = OmegaConf.create(cfg.model.net)
-                    net_config._target_ = "src._eqprop.backbone.AdjacentShortcutBackbone"
-                    net_config.update(net_params)
+                # --- Finalize Plot for the current combination ---
+                title = f"Feedforward Pass Stability ({backbone_info['title_name']}, {strategy_info['name']}, {init_method_dict['name']})"
+                if backbone_info['name'] == 'AdjacentShortcutBackbone':
+                    title += f", res_scale={cfg.model.net.res_scale}"
 
-                    net = hydra.utils.instantiate(net_config)
-                    model: LightningModule = hydra.utils.instantiate(cfg.model, net=net)
-
-                    all_layer_activities = run_forward_pass(model, datamodule)
-
-                    del model
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    gc.collect()
-                    
-                    if len(all_layer_activities) > layer_idx_l1:
-                        activity = all_layer_activities[layer_idx_l1]
-                        norms_for_current_depth["l1"].append(torch.mean(torch.abs(activity)).item())
-                    if len(all_layer_activities) > layer_idx_l_quarter:
-                        activity = all_layer_activities[layer_idx_l_quarter]
-                        norms_for_current_depth["l_quarter"].append(torch.mean(torch.abs(activity)).item())
-                    if len(all_layer_activities) > layer_idx_l_half:
-                        activity = all_layer_activities[layer_idx_l_half]
-                        norms_for_current_depth["l_half"].append(torch.mean(torch.abs(activity)).item())
-                    if len(all_layer_activities) > layer_idx_l_three_quarter:
-                        activity = all_layer_activities[layer_idx_l_three_quarter]
-                        norms_for_current_depth["l_three_quarter"].append(torch.mean(torch.abs(activity)).item())
-                    if len(all_layer_activities) > layer_idx_l_full:
-                        activity = all_layer_activities[layer_idx_l_full]
-                        norms_for_current_depth["l_full"].append(torch.mean(torch.abs(activity)).item())
+                plt.xlabel("Network Depth (L)", fontsize=14)
+                plt.ylabel("Mean L1 Norm of Activity", fontsize=14)
+                plt.title(title, fontsize=16)
+                plt.xscale('log')
+                plt.yscale('linear')
+                plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
+                plt.grid(True, which="both", ls="--")
+                plt.legend()
                 
-                mean_l1 = np.mean(norms_for_current_depth["l1"]) if norms_for_current_depth["l1"] else np.nan
-                mean_l_quarter = np.mean(norms_for_current_depth["l_quarter"]) if norms_for_current_depth["l_quarter"] else np.nan
-                mean_l_half = np.mean(norms_for_current_depth["l_half"]) if norms_for_current_depth["l_half"] else np.nan
-                mean_l_three_quarter = np.mean(norms_for_current_depth["l_three_quarter"]) if norms_for_current_depth["l_three_quarter"] else np.nan
-                mean_l_full = np.mean(norms_for_current_depth["l_full"]) if norms_for_current_depth["l_full"] else np.nan
-
-                l1_norms_at_l1.append(mean_l1)
-                l1_norms_at_l_quarter.append(mean_l_quarter)
-                l1_norms_at_l_half.append(mean_l_half)
-                l1_norms_at_l_three_quarter.append(mean_l_three_quarter)
-                l1_norms_at_l_full.append(mean_l_full)
-
-                print(f"        Mean L1 Norms for Depth {depth}:\n" \
-                      f"            l=1: {mean_l1:.4f}\n" \
-                      f"            l=L/4: {mean_l_quarter:.4f}\n" \
-                      f"            l=L/2: {mean_l_half:.4f}\n" \
-                      f"            l=3L/4: {mean_l_three_quarter:.4f}\n" \
-                      f"            l=L: {mean_l_full:.4f}\n")
-
-            # Plot results for the current combination
-            plt.plot(cfg.analysis.depths, l1_norms_at_l1, marker='o', linestyle='-', label='l=1')
-            plt.plot(cfg.analysis.depths, l1_norms_at_l_quarter, marker='x', linestyle='--', label='l=L/4')
-            plt.plot(cfg.analysis.depths, l1_norms_at_l_half, marker='s', linestyle='-', label='l=L/2')
-            plt.plot(cfg.analysis.depths, l1_norms_at_l_three_quarter, marker='D', linestyle='--', label='l=3L/4')
-            plt.plot(cfg.analysis.depths, l1_norms_at_l_full, marker='^', linestyle='-', label='l=L')
-
-            # --- Finalize Plot for the current combination ---
-            plt.xlabel("Network Depth (L)", fontsize=14)
-            plt.ylabel("Mean L1 Norm of Activity", fontsize=14)
-            plt.title(f"Feedforward Pass Stability (strategy={strategy_info['name']}, init={init_method_dict['name']})", fontsize=16)
-            plt.xscale('log')
-            plt.yscale('linear')
-            plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
-            plt.grid(True, which="both", ls="--")
-            plt.legend()
-            
-            save_dir = f"plotting/ffwd_activity_norm/EPSB_strategies/"
-            os.makedirs(save_dir, exist_ok=True)
-            save_path = f"{save_dir}{strategy_info['name']}_{init_method_dict['name']}.png"
-            plt.savefig(save_path)
-            print(f"\nPlot for {strategy_info['name']} with {init_method_dict['name']} init saved to {save_path}")
-            plt.close()
+                save_dir = f"plotting/ffwd_activity_norm/EPSB_strategies/{backbone_info['name']}/"
+                os.makedirs(save_dir, exist_ok=True)
+                save_path = f"{save_dir}{strategy_info['name']}_{init_method_dict['name']}.png"
+                plt.savefig(save_path, dpi=300)
+                print(f"\nPlot for {backbone_info['name']}, {strategy_info['name']} with {init_method_dict['name']} init saved to {save_path}")
+                plt.close()
 
 if __name__ == "__main__":
     main()
