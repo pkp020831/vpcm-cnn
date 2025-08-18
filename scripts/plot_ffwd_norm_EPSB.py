@@ -48,8 +48,8 @@ def main(cfg: DictConfig) -> None:
             "name": "ResistiveNetworkStrategy",
             "config": {
                 "_target_": "src.core.eqprop.strategy.ResistiveNetworkStrategy",
-                "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
-                "num_iterations": 60
+                "activation": {"_target_": "src.core.eqprop.activation.DifferentialPairRectifier"},
+                "num_iterations": 6
             }
         },
         {
@@ -136,7 +136,7 @@ def main(cfg: DictConfig) -> None:
                             "cfg": [cfg.analysis.input_size * 2] + [cfg.analysis.width] * depth + [cfg.analysis.output_size * 2],
                             "initialization": init_config,  # Pass the dynamically updated dictionary
                             "solver": solver_config,
-                            "bias": True, #[True] * (depth + 1),
+                            "bias": False, #[True] * (depth + 1),
                             "res_scale": scaled_res_scale
                         }
 

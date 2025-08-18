@@ -29,9 +29,9 @@ model:
     mode: "min"
   net:
     beta: 1.5
-    res_scale: 0.5
+    res_scale: 1
     solver:
-      _target_: src.core.eqprop.solvers.EqPropSolver
+      _target_: src.core.eqprop.solvers.AnalogEqPropSolver
       amp_factor: 0
       beta: 1.5
       strategy:

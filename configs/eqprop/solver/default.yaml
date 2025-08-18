@@ -1,5 +1,5 @@
 # @package model.net.solver
-_target_: src.core.eqprop.solvers.EqPropSolver
+_target_: src.core.eqprop.solvers.AnalogEqPropSolver
 amp_factor: 1.0
 beta: ${model.net.beta}
 strategy: ???

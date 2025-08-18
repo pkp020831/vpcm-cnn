@@ -1,9 +1,9 @@
 # @package model.net.solver.strategy
 defaults:
-  - activation: ideal
+  - activation: differential
 _target_: src.core.eqprop.strategy.ResistiveNetworkStrategy
 amp_factor: ${model.net.solver.amp_factor}
 add_nonlin_last: false
 update_mode: asynchronous
-num_iterations: 60
+num_iterations: 6
 initialization: zero #zero # Options: 'linear', 'zero', 'random'

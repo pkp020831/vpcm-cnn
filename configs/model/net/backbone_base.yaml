@@ -1,7 +1,7 @@
 # @package model.net
 defaults:
   - /eqprop/solver: default
-  - /eqprop/solver/strategy: proxqp
+  - /eqprop/solver/strategy: resistive
   - initialization: mup
   - _self_
 
