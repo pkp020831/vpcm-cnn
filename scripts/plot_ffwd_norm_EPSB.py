@@ -51,15 +51,15 @@ def main(cfg: DictConfig) -> None:
                 "activation": {"_target_": "src.core.eqprop.activation.DifferentialPairRectifier"},
                 "num_iterations": 6
             }
-        },
-        {
-            "name": "ProxQPStrategy",
-            "config": {
-                "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
-                "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
-                "amp_factor": 1.0
-            }
         }
+        #{
+        #    "name": "ProxQPStrategy",
+        #    "config": {
+        #        "_target_": "src.core.eqprop.strategy.ProxQPStrategy",
+        #        "activation": {"_target_": "src.core.eqprop.activation.IdealRectifier"},
+        #        "amp_factor": 1.0
+        #    }
+        #}
         #{
         #    "name": "NewtonStrategy",
         #    "config": {
@@ -73,7 +73,8 @@ def main(cfg: DictConfig) -> None:
         {"name": "orthogonal"},
         {"name": "default"},
         #{"name": "gaussian", "variance": 0.0078125}, # 1/128
-        {"name": "mup", "width": 8, "depth": 0, "variance": 1.0}
+        {"name": "mup", "width": 64, "depth": 0, "variance": 1.0},
+        {"name": "goemup", "width": 64, "depth": 0, "variance": 1.0}
     ]
 
     # --- Loop through every combination of backbone, strategy, and initialization ---
@@ -110,7 +111,7 @@ def main(cfg: DictConfig) -> None:
                         init_config = init_method_dict.copy()
                         
                         # If using muP, dynamically set its depth to the current network depth
-                        if init_config['name'] == 'mup':
+                        if init_config['name'] == 'mup' or init_config['name'] == 'goemup':
                             init_config['depth'] = depth+1
 
                         # Start with the base solver config from the main YAML

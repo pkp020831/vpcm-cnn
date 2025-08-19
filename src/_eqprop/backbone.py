@@ -86,6 +86,59 @@ def goemup_initialization(model, width, depth, variance=1.0):
                 layer.weight.data *= math.sqrt(1 / width / depth)
 
 
+def initialize_weights(model, initialization):
+    """
+    Initializes the weights of a model based on the provided configuration.
+
+    Args:
+        model (nn.Module): The model to initialize.
+        initialization (dict | None): The initialization configuration.
+    """
+    if initialization is None:
+        initialization = {"name": "default"}
+
+    init_name = initialization.get("name", "default")
+
+    if init_name == "default":
+        pass
+    elif init_name == "orthogonal":
+        for m in model.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+    elif init_name == "gaussian":
+        init_variance = initialization.get("variance")
+        if init_variance is None:
+            raise ValueError("'variance' must be specified in initialization config for gaussian.")
+        print(f"DEBUG: Initializing with gaussian, init_variance={init_variance}")
+        for i, m in enumerate(model.modules()):
+            if isinstance(m, nn.Linear):
+                std = init_variance**0.5
+                nn.init.normal_(m.weight, mean=0.0, std=std)
+                print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+    elif init_name == "mup":
+        mup_width = initialization.get("width")
+        mup_depth = initialization.get("depth")
+        init_variance = initialization.get("variance", 1.0)
+
+        if mup_width is None or mup_depth is None:
+            raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
+        
+        mup_initialization(model, width=mup_width, depth=mup_depth, variance=init_variance)
+    elif init_name == "goemup":
+        mup_width = initialization.get("width")
+        mup_depth = initialization.get("depth")
+        init_variance = initialization.get("variance", 1.0)
+
+        if mup_width is None or mup_depth is None:
+            raise ValueError("'width' and 'depth' must be specified in initialization config for GOEmuP.")
+
+        goemup_initialization(model, width=mup_width, depth=mup_depth, variance=init_variance)
+
+
 class MultiplyActivation(nn.Module):
     """Multiply Activation layer."""
 
@@ -120,8 +173,7 @@ class EqPropBackbone(nn.Module):
         solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         layer_scale: float = 4,
-        initialization: str = "default",
-        init_variance: float | None = None,
+        initialization: dict | None = None,
         residual: bool = False,  # Add residual argument
         res_scale: float = 1.0,  # Add res_scale for scaling the residual
     ) -> None:
@@ -137,8 +189,7 @@ class EqPropBackbone(nn.Module):
             param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
                 Defaults to eqprop_utils.AdjustParams().
             layer_scale (float, optional): Scaling factor between eqprop layers. Defaults to 4.0.
-            initialization (str, optional): Weight initialization method. Defaults to "default".
-            init_variance (float | None, optional): Variance for gaussian initialization. Defaults to None.
+            initialization (dict | None, optional): Weight initialization method. Defaults to None.
             residual (bool, optional): Whether to use identity shortcut connections. Defaults to False.
             res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
@@ -152,23 +203,7 @@ class EqPropBackbone(nn.Module):
         eqprop_utils.interleave.set_num_input(scale_input)
         eqprop_utils.interleave.set_num_output(scale_output)
 
-        if initialization == "orthogonal":
-            for m in self.model.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.orthogonal_(m.weight)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-        elif initialization == "gaussian":
-            if init_variance is None:
-                raise ValueError("init_variance must be specified for gaussian initialization.")
-            print(f"DEBUG: Initializing EqPropBackbone with gaussian, init_variance={init_variance}")
-            for i, m in enumerate(self.model.modules()):
-                if isinstance(m, nn.Linear):
-                    std = init_variance**0.5
-                    nn.init.normal_(m.weight, mean=0.0, std=std)
-                    print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
+        initialize_weights(self.model, initialization)
 
     def _make_layers(self, cfg, bias, solver, layer_scale) -> list[nn.Module]:
         layers = []
@@ -274,47 +309,7 @@ class EqPropSequentialBackbone(nn.Module):
         eqprop_utils.interleave.set_num_input(scale_input)
         eqprop_utils.interleave.set_num_output(scale_output)
 
-        if initialization is None:
-            initialization = {"name": "default"}
-
-        init_name = initialization.get("name", "default")
-
-        if init_name == "orthogonal":
-            for m in self.model.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.orthogonal_(m.weight)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-        elif init_name == "gaussian":
-            init_variance = initialization.get("variance")
-            if init_variance is None:
-                raise ValueError("'variance' must be specified in initialization config for gaussian.")
-            print(f"DEBUG: Initializing EqPropSequentialBackbone with gaussian, init_variance={init_variance}")
-            for i, m in enumerate(self.model.modules()):
-                if isinstance(m, nn.Linear):
-                    std = init_variance**0.5
-                    nn.init.normal_(m.weight, mean=0.0, std=std)
-                    print(f"  - Layer {i}: weight.std() = {m.weight.std():.4f} (target std: {std:.4f})")
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-        elif init_name == "mup":
-            mup_width = initialization.get("width")
-            mup_depth = initialization.get("depth")
-            init_variance = initialization.get("variance", 1.0) # Default variance to 1.0 if not provided
-
-            if mup_width is None or mup_depth is None:
-                raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
-            
-            mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
-        elif init_name == "goemup":
-            mup_width = initialization.get("width")
-            mup_depth = initialization.get("depth")
-            init_variance = initialization.get("variance", 1.0)
-
-            if mup_width is None or mup_depth is None:
-                raise ValueError("'width' and 'depth' must be specified in initialization config for GOEmuP.")
-
-            goemup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
+        initialize_weights(self.model, initialization)
 
     @staticmethod
     def _make_layers(cfg, bias):
@@ -515,46 +510,7 @@ class AdjacentShortcutBackbone(nn.Module):
         eqprop_utils.interleave.set_num_input(scale_input)
         eqprop_utils.interleave.set_num_output(scale_output)
 
-        if initialization is None:
-            initialization = {"name": "default"}
-
-        init_name = initialization.get("name", "default")
-
-        if init_name == "orthogonal":
-            for m in self.model.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.orthogonal_(m.weight)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-        elif init_name == "gaussian":
-            init_variance = initialization.get("variance")
-            if init_variance is None:
-                raise ValueError("'variance' must be specified in initialization config for gaussian.")
-            for i, m in enumerate(self.model.modules()):
-                if isinstance(m, nn.Linear):
-                    std = init_variance**0.5
-                    nn.init.normal_(m.weight, mean=0.0, std=std)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-        elif init_name == "mup":
-            mup_width = initialization.get("width")
-            mup_depth = initialization.get("depth")
-            init_variance = initialization.get("variance", 1.0)
-
-            if mup_width is None or mup_depth is None:
-                raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
-            
-            mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
-
-        elif init_name == "goemup":
-            mup_width = initialization.get("width")
-            mup_depth = initialization.get("depth")
-            init_variance = initialization.get("variance", 1.0)
-
-            if mup_width is None or mup_depth is None:
-                raise ValueError("'width' and 'depth' must be specified in initialization config for GOEmuP.")
-
-            goemup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
+        initialize_weights(self.model, initialization)
 
     @staticmethod
     def _make_layers(cfg, bias):
