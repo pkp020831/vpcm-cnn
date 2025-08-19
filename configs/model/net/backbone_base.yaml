@@ -10,6 +10,7 @@ beta: 1.5
 bias: false
 scale_input: 2
 scale_output: 2
+data_scale: 100
 cfg: ???
 
 

@@ -71,6 +71,7 @@ class EqPropBackbone(nn.Module):
         bias: bool | list[bool] = [True, False],
         scale_input: int = 2,
         scale_output: int = 2,
+        data_scale: float = 1.0,
         solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         layer_scale: float = 4,
@@ -86,6 +87,7 @@ class EqPropBackbone(nn.Module):
             bias (bool | list[bool], optional): Bias for each layer. Defaults to [True, False].
             scale_input (int, optional): Scale input. Defaults to 2.
             scale_output (int, optional): Scale output. Defaults to 2.
+            data_scale (float, optional): Scale for input data. Defaults to 1.0.
             solver (Optional[EqPropSolver], optional): Solver for EqProp. Defaults to None.
             param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
                 Defaults to eqprop_utils.AdjustParams().
@@ -98,6 +100,7 @@ class EqPropBackbone(nn.Module):
         super().__init__()
         self.residual = residual  # Store residual flag
         self.res_scale = res_scale
+        self.data_scale = data_scale
         layers = self._make_layers(cfg, bias, solver, layer_scale)
         self.model = nn.Sequential(*layers)
         self.param_adjuster = param_adjuster
@@ -139,6 +142,7 @@ class EqPropBackbone(nn.Module):
         if self.param_adjuster is not None:
             self.model.apply(self.param_adjuster)
 
+        x = x * self.data_scale
         activities = [x] # Store input activity
         current_output = x
         
@@ -189,6 +193,7 @@ class EqPropSequentialBackbone(nn.Module):
         bias: bool | list[bool] = [True, True],
         scale_input: int = 2,
         scale_output: int = 2,
+        data_scale: float = 1.0,
         solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
@@ -203,6 +208,7 @@ class EqPropSequentialBackbone(nn.Module):
             bias (bool | list[bool], optional): Bias for each layer. Defaults to [True, False].
             scale_input (int, optional): Scale input. Defaults to 2.
             scale_output (int, optional): Scale output. Defaults to 2.
+            data_scale (float, optional): Scale for input data. Defaults to 1.0.
             solver (Optional[EqPropSolver], optional): Solver for EqProp. Defaults to None.
             param_adjuster (Optional[eqprop_utils.AdjustParams], optional): Parameter adjuster for every forward call.
                 Defaults to eqprop_utils.AdjustParams().
@@ -212,6 +218,7 @@ class EqPropSequentialBackbone(nn.Module):
             res_scale (float, optional): Scaling factor for the residual connection. Defaults to 1.0.
         """
         super().__init__()
+        self.data_scale = data_scale
         
         self.model = enn.EqPropSequential(
             *self._make_layers(cfg, bias),
@@ -274,6 +281,7 @@ class EqPropSequentialBackbone(nn.Module):
     def forward(self, x, return_all_activities: bool = False):
         if self.param_adjuster is not None:
             self.model.apply(self.param_adjuster)
+        x = x * self.data_scale
         return self.model(x, return_all_activities=return_all_activities)
 
 
@@ -418,6 +426,7 @@ class AdjacentShortcutBackbone(nn.Module):
         bias: bool | list[bool] = [True, True],
         scale_input: int = 2,
         scale_output: int = 2,
+        data_scale: float = 1.0,
         solver: eqprop.solvers.EqPropSolver | None = None,
         param_adjuster: eqprop_utils.AdjustParams | None = eqprop_utils.AdjustParams(),
         eqprop_fn: Literal["positive", "altered", "centered"] = "centered",
@@ -425,6 +434,7 @@ class AdjacentShortcutBackbone(nn.Module):
         res_scale: float = 1.0,
     ) -> None:
         super().__init__()
+        self.data_scale = data_scale
 
         if solver:
             # Automatically generate shortcuts for adjacent HIDDEN layers
@@ -500,4 +510,5 @@ class AdjacentShortcutBackbone(nn.Module):
     def forward(self, x, return_all_activities: bool = False):
         if self.param_adjuster is not None:
             self.model.apply(self.param_adjuster)
+        x = x * self.data_scale
         return self.model(x, return_all_activities=return_all_activities)
