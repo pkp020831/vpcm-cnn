@@ -29,18 +29,12 @@ model:
     mode: "min"
   net:
     beta: 1.5
-    res_scale: 1
+    res_scale: 0.1
     solver:
       _target_: src.core.eqprop.solvers.AnalogEqPropSolver
       amp_factor: 0
       beta: 1.5
-      strategy:
-        _target_: src.core.eqprop.strategy.strategies.ProxQPStrategy
-        rtol: 1.0e-5
-        amp_factor: 0
-        activation:
-          _target_: src.core.eqprop.activation.IdealRectifier
-
+      
 seed: 12347
 
 # Analysis-specific parameters
@@ -50,16 +44,6 @@ analysis:
   width: 8
   depths: [8, 16, 32, 64, 128, 256, 512]
   n_seeds: 3
-  # Combinations of parameters to plot
-  param_combinations:
-    - name: "orthogonal"
-      params: {initialization: "orthogonal"}
-    - name: "default"
-      params: {initialization: "default"}
-    - name: "gaussian_var1"
-      params: {initialization: "gaussian", init_variance: 1.0}
-    - name: "gaussian_var_1_over_width"
-      params: {initialization: "gaussian", init_variance: 0.0078125}
 
 # Disable all loggers
 logger:

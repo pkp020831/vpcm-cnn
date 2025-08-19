@@ -13,10 +13,5 @@ scale_output: 2
 data_scale: 100
 cfg: ???
 
-
 param_adjuster:
   _target_: src.utils.eqprop_utils.AdjustParams
-
-#residual: false # Add this line for residual control
-#res_scale: 4
-#layer_scale: 1
