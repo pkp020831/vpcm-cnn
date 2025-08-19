@@ -41,6 +41,51 @@ def mup_initialization(model, width, depth, variance=1.0):
                 layer.weight.data *= math.sqrt(1 / width / depth)
 
 
+def goemup_initialization(model, width, depth, variance=1.0):
+    """
+    Performs GOE muP initialization on a model.
+    Assumes model contains a sequence of nn.Linear layers.
+    """
+    
+    linear_layers = [m for m in model.modules() if isinstance(m, nn.Linear)]
+    num_layers = len(linear_layers)
+
+    if num_layers == 0:
+        print("Warning: No linear layers found for GOE muP initialization.")
+        return
+
+    for i, layer in enumerate(linear_layers):
+        # GOE initialization
+        with torch.no_grad():
+            m, n = layer.weight.shape
+            
+            # 1. Create the base GOE matrix
+            N = max(m, n)
+            # Generate a matrix with elements from N(0, variance / 2)
+            A = torch.randn(N, N, device=layer.weight.device, dtype=layer.weight.dtype) * math.sqrt(variance / 2.0)
+            # Symmetrize
+            X = torch.triu(A) + torch.triu(A, 1).T
+            # Adjust diagonal variance to be N(0, variance)
+            # Current diagonal variance is variance/2. We need to add another variance/2.
+            diag_adjustment = torch.randn(N, device=layer.weight.device, dtype=layer.weight.dtype) * math.sqrt(variance / 2.0)
+            X.diagonal().add_(diag_adjustment)
+
+            # 2. Take a sub-block for the rectangular weight matrix
+            layer.weight.data.copy_(X[:m, :n])
+
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
+        # Apply muP scaling
+        with torch.no_grad():
+            if i == 0:  # Input layer
+                layer.weight.data *= math.sqrt(1 / 1568)
+            elif i == num_layers - 1:  # Output layer
+                layer.weight.data *= 1 / width
+            else:  # Hidden layer
+                layer.weight.data *= math.sqrt(1 / width / depth)
+
+
 class MultiplyActivation(nn.Module):
     """Multiply Activation layer."""
 
@@ -261,6 +306,15 @@ class EqPropSequentialBackbone(nn.Module):
                 raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
             
             mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
+        elif init_name == "goemup":
+            mup_width = initialization.get("width")
+            mup_depth = initialization.get("depth")
+            init_variance = initialization.get("variance", 1.0)
+
+            if mup_width is None or mup_depth is None:
+                raise ValueError("'width' and 'depth' must be specified in initialization config for GOEmuP.")
+
+            goemup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
 
     @staticmethod
     def _make_layers(cfg, bias):
@@ -491,6 +545,16 @@ class AdjacentShortcutBackbone(nn.Module):
                 raise ValueError("'width' and 'depth' must be specified in initialization config for muP.")
             
             mup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
+
+        elif init_name == "goemup":
+            mup_width = initialization.get("width")
+            mup_depth = initialization.get("depth")
+            init_variance = initialization.get("variance", 1.0)
+
+            if mup_width is None or mup_depth is None:
+                raise ValueError("'width' and 'depth' must be specified in initialization config for GOEmuP.")
+
+            goemup_initialization(self.model, width=mup_width, depth=mup_depth, variance=init_variance)
 
     @staticmethod
     def _make_layers(cfg, bias):
