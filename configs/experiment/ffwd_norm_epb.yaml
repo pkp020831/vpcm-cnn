@@ -12,7 +12,7 @@ hydra:
   output_subdir: null
 
 data:
-  _target_: src.data.mnist_datamodule.MNISTDataModule
+  _target_: src.data.fashion_mnist_datamodule.FashionMNISTDataModule
   data_dir: "data/"
   batch_size: 1
 
@@ -29,7 +29,7 @@ model:
     mode: "min"
   net:
     beta: 1.5
-    res_scale: 0.1
+    res_scale: 1
     solver:
       _target_: src.core.eqprop.solvers.AnalogEqPropSolver
       amp_factor: 0
@@ -41,7 +41,7 @@ seed: 12347
 analysis:
   input_size: 784
   output_size: 10
-  width: 8
+  width: 64
   depths: [8, 16, 32, 64, 128, 256, 512]
   n_seeds: 3
 

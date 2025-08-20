@@ -9,4 +9,4 @@ _target_: src._eqprop.backbone.AdjacentShortcutBackbone
 
 # Optionally, you can set the base scale for the shortcuts here.
 # If not set, it will default to 1.0 as defined in the class __init__.
-res_scale: 0.1
+res_scale: 0.25

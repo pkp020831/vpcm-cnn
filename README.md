@@ -90,8 +90,7 @@ python src/train.py model/net=ep_mnist model.net.beta=1 model.net.solver.amp_fac
 
 python src/train.py -m model/net=ep_mnist hparams_search=mnist_optuna trainer=gpu model/optimizer=adamw
 
-python src/train.py model/net=ep_mnist model.net.beta=4.2824 model.net.solver.amp_factor=9.5824 model/optimizer=adamw trainer=gpu model.optimizer.lr=0.001695 data.batch_si
-ze=128
+python src/train.py model/net=ident_ep_mnist model.net.beta=1 model/optimizer=adamw trainer=gpu model.optimizer.lr=0.001 model.net.solver.amp_factor=1.35 data.batch_size=64
 
 python src/train.py model/net=ep_mnist model.net.beta=1.717 model.net.solver.amp_factor=11.879 model.optimizer.lr=0.00125 model/optimizer=adamw trainer=gpu logger=[csv,wandb] data.batch_size=256
 

@@ -45,3 +45,5 @@ dependencies:
       - rootutils
       - pytorch-optimizer
       - matplotlib
+      - pandas
+      - seaborn

@@ -208,6 +208,7 @@ def main(cfg: DictConfig) -> None:
                 plt.title(title, fontsize=16)
                 plt.xscale('log')
                 plt.yscale('linear')
+                plt.ylim(bottom=0)
                 plt.xticks(cfg.analysis.depths, labels=cfg.analysis.depths)
                 plt.grid(True, which="both", ls="--")
                 plt.legend()

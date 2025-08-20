@@ -2,7 +2,7 @@
 defaults:
   - /eqprop/solver: default
   - /eqprop/solver/strategy: resistive
-  - initialization: mup
+  - initialization: goemup
   - _self_
 
 _target_: src._eqprop.EqPropBackbone
