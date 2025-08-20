@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 import yaml
+import math
 
 # ==============================================================================
 # PART 1: RUN TRAINING
@@ -17,13 +18,20 @@ betas = [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0]
 lrs = [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
 sconda_env_name = "myenv"
 run_name_prefix = "heatmap-test-"
+NETWORK_DEPTH_L = 4  # Number of hidden layers from ep_mnist.yaml
 
-print(f"--- Starting 3x3 grid search using base command from user ---")
+print(f"--- Starting grid search using base command from user ---")
+print(f"--- Using network depth L={NETWORK_DEPTH_L} for scaling beta and lr ---")
 
 # Loop through all combinations
 for beta in betas:
     for lr in lrs:
-        print(f"\n---> Running training for beta: {beta}, lr: {lr}")
+        # Scale beta and lr by sqrt(L)
+        scaled_beta = beta / math.sqrt(NETWORK_DEPTH_L)
+        scaled_lr = lr / math.sqrt(NETWORK_DEPTH_L)
+
+        print(f"\n---> Running training for unscaled beta: {beta}, lr: {lr}")
+        print(f"     SCALED to beta: {scaled_beta:.4f}, lr: {scaled_lr:.6f}")
         run_name = f"{run_name_prefix}beta{beta}-lr{lr}"
 
         command = [
@@ -35,8 +43,8 @@ for beta in betas:
             "model.net.solver.amp_factor=1.35",
             "data.batch_size=64",
             "trainer.max_epochs=5",
-            f"model.net.beta={beta}",
-            f"model.optimizer.lr={lr}",
+            f"model.net.beta={scaled_beta}",
+            f"model.optimizer.lr={scaled_lr}",
             f"+logger.wandb.name={run_name}"
         ]
 
@@ -47,15 +55,16 @@ for beta in betas:
             process.wait()  # Wait for the process to complete
             
             if process.returncode == 0:
-                print(f"---> Run SUCCEEDED for beta: {beta}, lr: {lr}")
+                print(f"---> Run SUCCEEDED for unscaled beta: {beta}, lr: {lr}")
             else:
-                print(f"---> Run FAILED with exit code {process.returncode} for beta: {beta}, lr: {lr}", file=sys.stderr)
+                print(f"---> Run FAILED with exit code {process.returncode} for unscaled beta: {beta}, lr: {lr}", file=sys.stderr)
 
         except Exception as e:
             print(f"--- An exception occurred while running command for beta={beta}, lr={lr} ---", file=sys.stderr)
             print(e, file=sys.stderr)
 
 print("\n--- All hyperparameter combinations have been run. ---")
+
 
 # ==============================================================================
 # PART 2: PLOT HEATMAPS
