@@ -77,8 +77,8 @@ def update_and_plot_heatmap():
         unscaled_lrs = pivot_df.index.to_numpy(dtype=float) * SCALE_FACTOR
 
         # Format labels as powers of 10 for better readability
-        beta_labels = [f"$10^{{{np.log10(b):.2f}}}$" for b in unscaled_betas]
-        lr_labels = [f"$10^{{{np.log10(l):.2f}}}$" for l in unscaled_lrs]
+        beta_labels = [f"$10^{{{int(round(np.log10(b)))}}}" for b in unscaled_betas]
+        lr_labels = [f"$10^{{{int(round(np.log10(l)))}}}" for l in unscaled_lrs]
     except Exception as e:
         print(f"Warning: Could not generate new labels, falling back to default. Error: {e}")
 
