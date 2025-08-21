@@ -66,12 +66,31 @@ def update_and_plot_heatmap():
     pivot_df.sort_index(ascending=False, inplace=True)
     pivot_df.sort_index(axis=1, ascending=True, inplace=True)
 
+    # --- Unscale beta and lr for plotting ---
+    NETWORK_DEPTH_L = 4  # As defined in the training script part
+    SCALE_FACTOR = math.sqrt(NETWORK_DEPTH_L)
+
+    beta_labels = pivot_df.columns
+    lr_labels = pivot_df.index
+    try:
+        unscaled_betas = pivot_df.columns.to_numpy(dtype=float) * SCALE_FACTOR
+        unscaled_lrs = pivot_df.index.to_numpy(dtype=float) * SCALE_FACTOR
+
+        # Format labels as powers of 10 for better readability
+        beta_labels = [f"$10^{{{np.log10(b):.2f}}}$" for b in unscaled_betas]
+        lr_labels = [f"$10^{{{np.log10(l):.2f}}}$" for l in unscaled_lrs]
+    except Exception as e:
+        print(f"Warning: Could not generate new labels, falling back to default. Error: {e}")
+
+
     # --- Generate Original Heatmap ---
     plt.figure(figsize=(10, 8))
-    ax_orig = sns.heatmap(pivot_df, annot=True, fmt=".4f", cmap="viridis_r")
+    ax_orig = sns.heatmap(pivot_df, annot=True, fmt=".4f", cmap="viridis_r", xticklabels=beta_labels, yticklabels=lr_labels)
     ax_orig.set_title("Original Training Loss after 5 Epochs")
     ax_orig.set_xlabel("Beta")
     ax_orig.set_ylabel("Learning Rate")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     plt.savefig(OUTPUT_FILE_ORIGINAL)
     plt.close()
     print(f"Saved updated original heatmap to {OUTPUT_FILE_ORIGINAL}")
@@ -85,24 +104,26 @@ def update_and_plot_heatmap():
     #     for j in range(len(pivot_df.columns)):
     #         plt.text(j, i, f"{pivot_df.values[i, j]:.4f}", ha="center", va="center", color="black")
 
-    plt.xticks(ticks=np.arange(len(pivot_df.columns)), labels=pivot_df.columns)
-    plt.yticks(ticks=np.arange(len(pivot_df.index)), labels=pivot_df.index)
+    plt.xticks(ticks=np.arange(len(pivot_df.columns)), labels=beta_labels, rotation=45)
+    plt.yticks(ticks=np.arange(len(pivot_df.index)), labels=lr_labels)
 
     plt.xlabel("Beta", fontsize=14)
     plt.ylabel("Learning Rate", fontsize=14)
     plt.title("Training Loss", fontsize=16)
     plt.colorbar(img, label="Training Loss")
+    plt.tight_layout()
     plt.savefig(OUTPUT_FILE_SMOOTHED)
     plt.close()
     print(f"Saved updated smoothed heatmap to {OUTPUT_FILE_SMOOTHED}")
+
 
 # ==============================================================================
 # PART 2: RUN TRAINING & LIVE PLOTTING
 # ==============================================================================
 
 # --- Training Configuration ---
-betas = np.logspace(-2, 1, num=6)
-lrs = np.logspace(-5, 0, num=10)
+betas = np.logspace(-3, 3, num=8)
+lrs = np.logspace(-6, 1, num=8)
 sconda_env_name = "myenv"
 NETWORK_DEPTH_L = 4
 
