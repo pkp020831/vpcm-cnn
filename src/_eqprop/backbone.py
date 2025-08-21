@@ -483,6 +483,7 @@ class AdjacentShortcutBackbone(nn.Module):
         res_scale: float = 1.0,
     ) -> None:
         super().__init__()
+        self.res_scale = res_scale
         self.data_scale = data_scale
 
         if solver:

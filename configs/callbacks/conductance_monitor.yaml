@@ -1,0 +1,2 @@
+conductance_monitor:
+  _target_: src.utils.conductance_monitor.ConductanceMonitor

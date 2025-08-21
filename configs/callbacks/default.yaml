@@ -5,6 +5,7 @@ defaults:
   - rich_progress_bar
   - memory_optimizer
   - wandb_callback.yaml
+  - conductance_monitor
   - _self_
 
 model_checkpoint:
