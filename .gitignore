@@ -160,3 +160,4 @@ configs/local/default.yaml
 *.gif
 *.bmp
 *.npz
+*.csv

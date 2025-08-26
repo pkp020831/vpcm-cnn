@@ -350,12 +350,20 @@ class WeightWatcherCallback(Callback):
 
         output_dir.mkdir(parents=True, exist_ok=True)
         
+        # Get learning rate
+        lr = "unknown"
+        if trainer.optimizers:
+            try:
+                lr = trainer.optimizers[0].param_groups[0]['lr']
+            except (IndexError, KeyError):
+                pass # Keep lr as "unknown"
+
         run_name = "default_run"
         if trainer.logger and hasattr(trainer.logger, 'name') and trainer.logger.name:
             run_name = trainer.logger.name
         
         timestamp = time.strftime("%Y%m%d-%H%M%S")
-        file_name = f"ww_results_{run_name}_{timestamp}.csv"
+        file_name = f"ww_results_{run_name}_lr_{lr}_{timestamp}.csv"
         output_file = output_dir / file_name
 
         try:

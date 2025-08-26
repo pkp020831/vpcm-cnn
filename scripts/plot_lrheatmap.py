@@ -13,11 +13,8 @@ import math
 # ==============================================================================
 
 WANDB_ENTITY = "hongroot-seoul-national-university"
-WANDB_PROJECT = "heatmap_2048x3"
+WANDB_PROJECT = "heatmap_512x3_mnist"
 RUN_NAME_PREFIX = "heatmap-test-"
-
-# This should match the values in the training script
-NETWORK_DEPTH_L = 4  # SGD는 1로 설정
 
 OUTPUT_DIR = Path("plotting/loss_heatmap")
 OUTPUT_FILE_ORIGINAL = OUTPUT_DIR / "loss_heatmap_original.png"
@@ -61,19 +58,18 @@ def fetch_wandb_data(entity, project, run_prefix):
     print(f"Found {len(data)} completed runs to plot.")
     return pd.DataFrame(data)
 
-def prepare_heatmap_data(df, scale_factor):
+def prepare_heatmap_data(df):
     """Takes a DataFrame and returns a pivot table with a perfect log-scale grid."""
     # 1. Define the desired plotting grid with clean log-scale intervals
 
-    unscaled_betas_grid = np.logspace(-3, 3, num=7)  
-    unscaled_lrs_grid = np.logspace(-6, 1, num=8)
+    betas_grid = np.logspace(-3, 6, num=10)
+    lrs_grid = np.logspace(-6, 1, num=8)
 
-    # 2. Scale this 'true' grid to match the value ranges stored in wandb
-    scaled_betas_grid = unscaled_betas_grid / scale_factor
-    scaled_lrs_grid = np.sort(unscaled_lrs_grid / scale_factor)[::-1] # Sort descending for plot
+    # 2. Sort lrs for plot
+    lrs_grid = np.sort(lrs_grid)[::-1] # Sort descending for plot
 
-    # 3. Create a new, empty pivot table with this clean, scaled grid
-    pivot_df = pd.DataFrame(np.nan, index=scaled_lrs_grid, columns=scaled_betas_grid)
+    # 3. Create a new, empty pivot table with this clean, unscaled grid
+    pivot_df = pd.DataFrame(np.nan, index=lrs_grid, columns=betas_grid)
 
     # 4. Map the fetched data to the clean pivot table
     for _, row in df.iterrows():
@@ -87,8 +83,8 @@ def prepare_heatmap_data(df, scale_factor):
         pivot_df.iat[lr_idx, beta_idx] = loss_val
 
     # 5. Create labels from the clean, unscaled grid
-    beta_labels = [format_tick_label(b) for b in unscaled_betas_grid]
-    lr_labels = [format_tick_label(l) for l in np.sort(unscaled_lrs_grid)[::-1]]
+    beta_labels = [format_tick_label(b) for b in betas_grid]
+    lr_labels = [format_tick_label(l) for l in lrs_grid]
 
     return pivot_df, beta_labels, lr_labels
 
@@ -101,8 +97,8 @@ def generate_heatmaps(pivot_df, beta_labels, lr_labels, output_original, output_
     plt.figure(figsize=(10, 8))
     ax_orig = sns.heatmap(pivot_df, annot=True, fmt=".4f", cmap="viridis_r", xticklabels=beta_labels, yticklabels=lr_labels)
     ax_orig.set_title("Original Training Loss after 5 Epochs")
-    ax_orig.set_xlabel("Unscaled Beta")
-    ax_orig.set_ylabel("Unscaled Learning Rate")
+    ax_orig.set_xlabel("Beta")
+    ax_orig.set_ylabel("Learning Rate")
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
     plt.savefig(output_original)
@@ -120,13 +116,15 @@ def generate_heatmaps(pivot_df, beta_labels, lr_labels, output_original, output_
     #         plt.text(j, i, f"{pivot_df.values[i, j]:.4f}", ha="center", va="center", color="black")
 
     # Set ticks and labels based on the grid dimensions
-    plt.xticks(ticks=np.arange(len(beta_labels)), labels=beta_labels, rotation=45, ha="right")
-    plt.yticks(ticks=np.arange(len(lr_labels)), labels=lr_labels)
+    plt.xticks(ticks=np.arange(len(beta_labels)), labels=beta_labels, rotation=45, ha="right", fontsize=16)
+    plt.yticks(ticks=np.arange(len(lr_labels)), labels=lr_labels, fontsize=16)
 
-    plt.xlabel("Unscaled Beta", fontsize=14)
-    plt.ylabel("Unscaled Learning Rate", fontsize=14)
-    plt.title("Smoothed Training Loss", fontsize=16)
-    plt.colorbar(img, label="Training Loss")
+    plt.xlabel("Beta", fontsize=18)
+    plt.ylabel("Learning Rate", fontsize=18)
+    plt.title("N=128", fontsize=20)
+    cbar = plt.colorbar(img)
+    cbar.set_label("Training Loss", size=18)
+    cbar.ax.tick_params(labelsize=16)
     plt.tight_layout()
     plt.savefig(output_smoothed)
     plt.close()
@@ -141,8 +139,7 @@ def main():
     raw_data_df = fetch_wandb_data(WANDB_ENTITY, WANDB_PROJECT, RUN_NAME_PREFIX)
 
     if raw_data_df is not None and not raw_data_df.empty:
-        scale_factor = math.sqrt(NETWORK_DEPTH_L)
-        pivot_df, beta_labels, lr_labels = prepare_heatmap_data(raw_data_df, scale_factor)
+        pivot_df, beta_labels, lr_labels = prepare_heatmap_data(raw_data_df)
         generate_heatmaps(pivot_df, beta_labels, lr_labels, OUTPUT_FILE_ORIGINAL, OUTPUT_FILE_SMOOTHED)
 
 if __name__ == "__main__":
