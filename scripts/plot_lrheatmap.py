@@ -13,11 +13,11 @@ import math
 # ==============================================================================
 
 WANDB_ENTITY = "hongroot-seoul-national-university"
-WANDB_PROJECT = "heatmap_1024x3"
+WANDB_PROJECT = "heatmap_2048x3"
 RUN_NAME_PREFIX = "heatmap-test-"
 
 # This should match the values in the training script
-NETWORK_DEPTH_L = 4
+NETWORK_DEPTH_L = 4  # SGD는 1로 설정
 
 OUTPUT_DIR = Path("plotting/loss_heatmap")
 OUTPUT_FILE_ORIGINAL = OUTPUT_DIR / "loss_heatmap_original.png"
