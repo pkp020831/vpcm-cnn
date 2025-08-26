@@ -25,4 +25,5 @@ pytest          # tests
 matplotlib
 pandas
 seaborn
+weightwatcher
 

@@ -9,6 +9,12 @@ from lightning.pytorch.loggers.logger import DummyLogger
 
 from src._eqprop.direct_backbone import AnalogEP2
 from src.utils.eqprop_utils import deltaV
+import weightwatcher as ww
+import wandb
+import pathlib
+import time
+import rootutils
+
 
 LOGGER_TYPE = {"tb": TensorBoardLogger, "wandb": WandbLogger}
 
@@ -321,6 +327,44 @@ class WandbLoggerCallback(AdvLoggerCallback):
 
 
 import gc
+
+
+class WeightWatcherCallback(Callback):
+    """Callback to run weightwatcher at the end of training and save results to CSV."""
+
+    def on_train_end(self, trainer: Trainer, pl_module: L.LightningModule) -> None:
+        """Hook to run at the end of a training."""
+        pl_module.print("--- WeightWatcherCallback: on_train_end hook started ---")
+        
+        try:
+            project_root = rootutils.find_root(search_from=__file__, indicator=".project-root")
+        except FileNotFoundError:
+            pl_module.print("Warning: .project-root indicator not found. Saving to current dir.")
+            project_root = pathlib.Path.cwd()
+
+        output_dir = project_root / "weightwatcher"
+        
+        pl_module.print("Running WeightWatcher analysis...")
+        watcher = ww.WeightWatcher(model=pl_module.net)
+        results = watcher.analyze()
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        run_name = "default_run"
+        if trainer.logger and hasattr(trainer.logger, 'name') and trainer.logger.name:
+            run_name = trainer.logger.name
+        
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        file_name = f"ww_results_{run_name}_{timestamp}.csv"
+        output_file = output_dir / file_name
+
+        try:
+            results.to_csv(output_file, index=False)
+            pl_module.print(f"WeightWatcher results saved to {output_file}")
+        except Exception as e:
+            pl_module.print(f"!!! ERROR saving WeightWatcher results: {e} !!!")
+
+        pl_module.print("--- WeightWatcherCallback: on_train_end hook finished ---")
 
 
 class MemoryOptimizerCallback(Callback):

@@ -1,0 +1,2 @@
+weightwatcher:
+  _target_: src.utils.pycallbacks.WeightWatcherCallback
