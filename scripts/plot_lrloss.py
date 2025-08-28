@@ -14,7 +14,8 @@ import math
 # ==============================================================================
 
 WANDB_ENTITY = "hongroot-seoul-national-university"
-WANDB_PROJECT = "lrloss_512x3_goemup"  # Make sure this is the correct project
+# Add the project names you want to compare
+WANDB_PROJECTS = ["lrloss_512x2_goemup", "lrloss_512x3_goemup", "lrloss_512x4_goemup", "lrloss_512x5_goemup"]
 RUN_NAME_PREFIX = "lossgraph-"
 
 
@@ -53,46 +54,40 @@ def fetch_wandb_data(entity, project, run_prefix):
     print(f"Found {len(data)} completed runs to plot.")
     return pd.DataFrame(data)
 
-
-def generate_line_plot(df):
+def generate_line_plot(df, value_column, title, ylabel, filename, log_y):
     """
-    Generates and saves a line plot of loss vs. learning rate.
-    If multiple seeds are found for the same LR, it plots the mean and a confidence interval.
+    Generates and saves a line plot of a given value vs. learning rate for multiple projects.
     """
-    print(f"--- Generating line plot ---")
+    print(f"--- Generating plot: {title} ---")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_file = OUTPUT_DIR / f"lr_vs_loss_multi_seed.png"
+    output_file = OUTPUT_DIR / filename
 
     plot_data = df.sort_values(by='lr')
 
     if plot_data.empty:
-        print(f"No data found. Skipping plot generation.")
+        print("No data found. Skipping plot generation.")
         return
-
-    num_seeds = plot_data.groupby('lr')['seed'].nunique().min()
-
-    plt.figure(figsize=(12, 7))
-    # seaborn's lineplot will automatically aggregate data, plotting the mean
-    # and a 95% confidence interval by default when it sees multiple y-values for the same x.
-    ax = sns.lineplot(data=plot_data, x='lr', y='train_loss', marker='o', errorbar=('ci', 95))
+    
+    plt.figure(figsize=(14, 8))
+    ax = sns.lineplot(data=plot_data, x='lr', y=value_column, hue='project', marker='o', errorbar=('ci', 95))
     
     ax.set_xscale('log')
-    ax.set_yscale('log')
-
-    # Format y-axis to display regular numbers instead of scientific notation
-    ax.get_yaxis().set_major_formatter(ScalarFormatter())
-    ax.get_yaxis().set_minor_formatter(ScalarFormatter())
+    if log_y:
+        ax.set_yscale('log')
+        ax.get_yaxis().set_major_formatter(ScalarFormatter())
+        ax.get_yaxis().set_minor_formatter(ScalarFormatter())
     
-    ax.set_title(f"Training Loss vs. Learning Rate (Mean over {num_seeds} seeds)")
+    ax.set_title(title)
     ax.set_xlabel("Learning Rate (log scale)")
-    ax.set_ylabel("Final Training Loss (log scale, 95% CI)")
+    ax.set_ylabel(ylabel)
     
     plt.grid(True, which="both", ls="--")
+    plt.legend(title='Project')
     plt.tight_layout()
     plt.savefig(output_file)
     plt.close()
     
-    print(f"Saved line plot to {output_file}")
+    print(f"Saved plot to {output_file}")
 
 
 # ==============================================================================
@@ -101,10 +96,39 @@ def generate_line_plot(df):
 
 def main():
     """Main function to run the script."""
-    raw_data_df = fetch_wandb_data(WANDB_ENTITY, WANDB_PROJECT, RUN_NAME_PREFIX)
+    all_data = []
+    for project in WANDB_PROJECTS:
+        print(f"\n{'='*20} Processing project: {project} {'='*20}")
+        df = fetch_wandb_data(WANDB_ENTITY, project, RUN_NAME_PREFIX)
+        if df is not None and not df.empty:
+            df['project'] = project
+            all_data.append(df)
 
-    if raw_data_df is not None and not raw_data_df.empty:
-        generate_line_plot(raw_data_df)
+    if not all_data:
+        print("\nNo data found for any project. Exiting.")
+        return
+
+    combined_df = pd.concat(all_data, ignore_index=True)
+    
+    # Generate Loss Plot
+    generate_line_plot(
+        df=combined_df,
+        value_column='train_loss',
+        title='Training Loss vs. Learning Rate Comparison',
+        ylabel='Final Training Loss (log scale, 95% CI)',
+        filename='lr_vs_loss_comparison.png',
+        log_y=True
+    )
+
+    # Generate Accuracy Plot
+    generate_line_plot(
+        df=combined_df,
+        value_column='train_acc',
+        title='Training Accuracy vs. Learning Rate Comparison',
+        ylabel='Final Training Accuracy (95% CI)',
+        filename='lr_vs_acc_comparison.png',
+        log_y=False
+    )
 
 
 if __name__ == "__main__":
