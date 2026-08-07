@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "navcim-m4"
+version = "0.1.0"
+description = "ARM64 NavCim core runner for VGG11-CIFAR10"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "apache-tvm==0.25.0.post1",
+  "apache-tvm-ffi==0.1.12",
+  "numpy==2.5.1",
+  "onnx==1.22.0",
+  "torch==2.13.0",
+  "torchvision==0.28.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[tool.setuptools.packages.find]
+include = ["navcim_m4*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
