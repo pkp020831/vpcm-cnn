@@ -14,5 +14,6 @@ Inference_pytorch/log/models/
 .pytest_cache/
 build/
 outputs/
+data/
 *.dylib
 .DS_Store

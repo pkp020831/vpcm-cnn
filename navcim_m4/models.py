@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import torch
 from torch import nn
@@ -66,6 +67,16 @@ def create_model(seed: int = 117) -> VGG11Cifar10:
     model = VGG11Cifar10()
     model.eval()
     return model
+
+
+def load_checkpoint(path: Path) -> tuple[VGG11Cifar10, dict[str, Any]]:
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    if checkpoint.get("model_name") != ModelInfo().name:
+        raise ValueError(f"Unsupported checkpoint model: {checkpoint.get('model_name')!r}")
+    model = VGG11Cifar10(num_classes=int(checkpoint["num_classes"]))
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+    return model, checkpoint
 
 
 def sample_input(seed: int = 117) -> torch.Tensor:

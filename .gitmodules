@@ -10,3 +10,7 @@
 [submodule "TOPSIS-Python"]
 	path = TOPSIS-Python
 	url = https://github.com/wntjd9805/navcim_topsis.git
+[submodule "third_party/cross-sim-3.2"]
+	path = third_party/cross-sim-3.2
+	url = https://github.com/sandialabs/cross-sim.git
+	branch = v3.2.1

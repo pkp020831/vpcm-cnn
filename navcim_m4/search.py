@@ -6,8 +6,9 @@ from itertools import product
 from pathlib import Path
 
 from .graph import validate_with_tvm
+from .accuracy import CrossSimConfig, cached_crosssim
 from .layers import create_layer_artifacts, write_network_csv
-from .models import create_model, export_onnx
+from .models import create_model, export_onnx, load_checkpoint
 from .simulators import (
     HardwareConfig,
     build_booksim,
@@ -42,10 +43,17 @@ def run_search(
     tile_values: list[int],
     workers: int = 4,
     jobs: int = 8,
+    checkpoint: Path | None = None,
+    crosssim_config: CrossSimConfig | None = None,
+    crosssim_samples: int = 100,
+    crosssim_runs: int = 1,
+    data_dir: Path = Path("data"),
+    adc_values: list[int] | None = None,
+    cell_values: list[int] | None = None,
 ) -> dict:
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    model = create_model()
+    model = load_checkpoint(checkpoint)[0] if checkpoint is not None else create_model()
     onnx_path = export_onnx(model, output_dir / "vgg11_cifar10.onnx")
     graph = validate_with_tvm(onnx_path)
     artifacts = create_layer_artifacts(model, output_dir / "layers")
@@ -53,8 +61,8 @@ def run_search(
     neurosim_binary = build_neurosim(root, jobs)
     booksim_binary = build_booksim(root, jobs)
     configs = [
-        HardwareConfig(sa, sa, pe, tile)
-        for sa, pe, tile in product(sa_values, pe_values, tile_values)
+        HardwareConfig(sa, sa, pe, tile, adc, cell)
+        for sa, pe, tile, adc, cell in product(sa_values, pe_values, tile_values, adc_values or [5], cell_values or [2])
         if tile >= pe
     ]
     if not configs:
@@ -67,7 +75,21 @@ def run_search(
         candidate_dir = output_dir / "candidates" / config.key
         neurosim = run_neurosim(neurosim_binary, network_csv, artifacts, config, candidate_dir)
         booksim = run_booksim(booksim_binary, root, config, candidate_dir)
-        return result_dict(config, neurosim, booksim)
+        result = result_dict(config, neurosim, booksim)
+        if crosssim_config is not None:
+            if checkpoint is None:
+                raise ValueError("--crosssim requires --checkpoint")
+            accuracy = cached_crosssim(
+                checkpoint, data_dir, crosssim_samples, 32, crosssim_runs,
+                CrossSimConfig(**(crosssim_config.__dict__ | {"adc_bits": config.adc_bits, "cell_bits": config.cell_bits, "rows": config.sa_row, "cols": config.sa_col})),
+                output_dir / "crosssim-cache",
+            )
+            result.update({key: accuracy[key] for key in (
+                "digital_accuracy", "crosssim_accuracy_mean", "crosssim_accuracy_std",
+                "accuracy_drop_percentage_points", "crosssim_samples", "crosssim_runs",
+                "crosssim_config", "checkpoint_sha256", "digital_seconds",
+            )})
+        return result
 
     with ThreadPoolExecutor(max_workers=max(1, min(workers, 4))) as executor:
         futures = {executor.submit(simulate, config): config for config in configs}
