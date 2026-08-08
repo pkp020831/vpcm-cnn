@@ -94,6 +94,8 @@ def main() -> int:
     train_parser.add_argument("--data-dir", type=Path, default=Path("data"))
     train_parser.add_argument("--checkpoint", type=Path, default=Path("outputs/checkpoints/vgg11-cifar10.pt"))
     train_parser.add_argument("--train-samples", type=int)
+    train_parser.add_argument("--checkpoint-interval", type=int, default=10)
+    train_parser.add_argument("--resume", action="store_true")
     train_parser.add_argument("--force", action="store_true")
     crosssim_parser = subparsers.add_parser("crosssim")
     crosssim_parser.add_argument("--checkpoint", type=Path, required=True)
@@ -117,7 +119,7 @@ def main() -> int:
         print(json.dumps(validate_with_tvm(path).__dict__, indent=2))
         return 0
     if args.command == "train":
-        print(json.dumps(train_vgg11(args.data_dir, args.checkpoint, args.device, args.epochs, args.batch_size, args.seed, not args.force, args.train_samples), indent=2, sort_keys=True))
+        print(json.dumps(train_vgg11(args.data_dir, args.checkpoint, args.device, args.epochs, args.batch_size, args.seed, not args.force and not args.resume, args.train_samples, args.checkpoint_interval, args.resume), indent=2, sort_keys=True))
         return 0
     if args.command == "crosssim":
         print(json.dumps(evaluate_crosssim(args.checkpoint, args.data_dir, args.samples, args.batch_size, args.runs, _crosssim_config(args), args.output), indent=2, sort_keys=True))

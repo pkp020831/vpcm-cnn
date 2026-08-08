@@ -91,21 +91,66 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> dict
     return {"accuracy": 100 * correct / total, "correct": correct, "samples": total, "seconds": elapsed}
 
 
-def train_vgg11(data_dir: Path, checkpoint: Path, device_name: str, epochs: int, batch_size: int, seed: int, reuse: bool = True, train_samples: int | None = None) -> dict[str, Any]:
+def _save_training_checkpoint(checkpoint: Path, model: VGG11Cifar10, optimizer: torch.optim.Optimizer, scheduler: torch.optim.lr_scheduler.LRScheduler, epoch: int, target_epochs: int, seed: int, training_accuracy: float, validation: dict[str, float | int], history: list[dict[str, Any]], completed: bool) -> None:
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    model.cpu()
+    torch.save({
+        "model_name": ModelInfo().name,
+        "num_classes": ModelInfo().classes,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict(),
+        "epoch": epoch,
+        "target_epochs": target_epochs,
+        "seed": seed,
+        "training_accuracy": training_accuracy,
+        "validation_accuracy": validation["accuracy"],
+        "validation": validation,
+        "history": history,
+        "completed": completed,
+        "preprocessing": {"mean": CIFAR10_MEAN, "std": CIFAR10_STD, "input_shape": ModelInfo().input_shape},
+    }, checkpoint)
+
+
+def train_vgg11(data_dir: Path, checkpoint: Path, device_name: str, epochs: int, batch_size: int, seed: int, reuse: bool = True, train_samples: int | None = None, checkpoint_interval: int = 10, resume: bool = False) -> dict[str, Any]:
+    if resume and reuse:
+        raise ValueError("--resume cannot be combined with checkpoint reuse")
     if checkpoint.is_file() and reuse:
         _, saved = load_checkpoint(checkpoint)
         return {"checkpoint": str(checkpoint), "reused": True, "validation_accuracy": saved["validation_accuracy"]}
-    if epochs < 1:
-        raise ValueError("--epochs must be positive")
+    if epochs < 1 or checkpoint_interval < 1:
+        raise ValueError("--epochs and --checkpoint-interval must be positive")
     _seed(seed)
     device = select_device(device_name)
-    model = VGG11Cifar10().to(device)
+    model = VGG11Cifar10()
+    start_epoch = 0
+    history: list[dict[str, Any]] = []
+    saved: dict[str, Any] | None = None
+    if resume:
+        if not checkpoint.is_file():
+            raise FileNotFoundError(f"Cannot resume missing checkpoint: {checkpoint}")
+        model, saved = load_checkpoint(checkpoint)
+        start_epoch = int(saved["epoch"])
+        if int(saved.get("target_epochs", epochs)) != epochs:
+            raise ValueError("--epochs must match the target epoch count stored in the checkpoint when resuming")
+        history = list(saved.get("history", []))
+        if start_epoch >= epochs:
+            return {"checkpoint": str(checkpoint), "reused": True, "validation_accuracy": saved["validation_accuracy"], "epoch": start_epoch}
+    model.to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.05, momentum=0.9, weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    if saved is not None:
+        optimizer.load_state_dict(saved["optimizer_state_dict"])
+        scheduler.load_state_dict(saved["scheduler_state_dict"])
+        for state in optimizer.state.values():
+            for name, value in state.items():
+                if torch.is_tensor(value):
+                    state[name] = value.to(device)
     train_loader = cifar10_loader(data_dir, True, batch_size, train_samples, augment=True)
     test_loader = cifar10_loader(data_dir, False, batch_size)
     train_accuracy = 0.0
-    for _ in range(epochs):
+    validation: dict[str, float | int] = {"accuracy": 0.0, "correct": 0, "samples": 0, "seconds": 0.0}
+    for epoch in range(start_epoch + 1, epochs + 1):
         model.train()
         correct = total = 0
         for inputs, labels in train_loader:
@@ -118,20 +163,14 @@ def train_vgg11(data_dir: Path, checkpoint: Path, device_name: str, epochs: int,
             total += len(labels)
         scheduler.step()
         train_accuracy = 100 * correct / total
-    validation = evaluate(model, test_loader, device)
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({
-        "model_name": ModelInfo().name,
-        "num_classes": ModelInfo().classes,
-        "model_state_dict": model.cpu().state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "epoch": epochs,
-        "seed": seed,
-        "training_accuracy": train_accuracy,
-        "validation_accuracy": validation["accuracy"],
-        "preprocessing": {"mean": CIFAR10_MEAN, "std": CIFAR10_STD, "input_shape": ModelInfo().input_shape},
-    }, checkpoint)
-    return {"checkpoint": str(checkpoint), "reused": False, "device": str(device), "training_accuracy": train_accuracy, "validation_accuracy": validation["accuracy"]}
+        if epoch % checkpoint_interval == 0 or epoch == epochs:
+            validation = evaluate(model, test_loader, device)
+            record = {"epoch": epoch, "training_accuracy": train_accuracy, "validation_accuracy": validation["accuracy"], "validation_correct": validation["correct"], "validation_seconds": validation["seconds"]}
+            history.append(record)
+            _save_training_checkpoint(checkpoint, model, optimizer, scheduler, epoch, epochs, seed, train_accuracy, validation, history, epoch == epochs)
+            model.to(device)
+            print(json.dumps(record, sort_keys=True), flush=True)
+    return {"checkpoint": str(checkpoint), "reused": False, "device": str(device), "epoch": epochs, "training_accuracy": train_accuracy, "validation_accuracy": validation["accuracy"], "history": history}
 
 
 def checkpoint_sha256(path: Path) -> str:

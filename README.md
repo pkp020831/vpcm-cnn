@@ -103,6 +103,17 @@ python -m navcim_m4 train --device auto --epochs 100 \
 ```
 
 For a fast training-path smoke check, append `--epochs 1 --train-samples 100`.
+Training writes a checkpoint and prints official CIFAR-10 validation accuracy
+every 10 epochs. Resume an interrupted run up to the same total epoch target:
+
+```bash
+python -m navcim_m4 train --device auto --epochs 100 --resume \
+  --checkpoint outputs/checkpoints/vgg11-cifar10.pt
+```
+
+Checkpoints and generated outputs are intentionally excluded from Git. Publish
+models through a GitHub Release, Git LFS, or an external artifact store, and
+record the training command and `shasum -a 256` digest alongside the artifact.
 
 Run a reproducible 100-image CPU smoke evaluation, then a full CIFAR-10
 evaluation when ready:
