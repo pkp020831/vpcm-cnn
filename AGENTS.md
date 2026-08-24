@@ -67,6 +67,7 @@ model/workload
 - BookSim `Total Area` is in mm2 even though the retained compatibility field is named `area_m2`; convert it to NeuroSim um2 with `1e6`, not `1e12`.
 - Current pre-push hardening work has fixed BookSim mode selection, layerwise predictor energy composition, full-candidate TOPSIS validation-pool selection, candidate cache contracts, NeuroSim mesh column emission, staged provenance checks, split/cache integrity, and local artifact portability. The repaired four-candidate predictor+meta search validated all four candidates and reproduced the top-1 with latency relative error about 0.013% and total-power relative error about 0.046%.
 - Do not push to main until the remaining pre-push review findings are addressed or explicitly accepted: the all-in-one hardware sweep still rebuilds upstream artifacts, staged manifest migration requires regeneration of old manifests, and large in-domain/meta dataset expansion remains incomplete.
+- The staged M4 pipeline implementation and current hardening changes were pushed to `main` at commit `d77832c3`. The remaining review findings above are follow-up work, not evidence that the pushed PPA results are production-complete.
 
 # Scope Boundaries
 
