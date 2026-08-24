@@ -291,7 +291,8 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 	*coreLatencyAccum = 0;
 	*coreLatencyOther = 0;
 	
-	double subArrayReadLatency, subArrayReadDynamicEnergy, subArrayLeakage, subArrayLatencyADC, subArrayLatencyAccum, subArrayLatencyOther;
+	double subArrayReadLatency, subArrayReadDynamicEnergy, subArrayLatencyADC, subArrayLatencyAccum, subArrayLatencyOther;
+	double subArrayLeakage = 0;
 
 	if (arrayDupRow*arrayDupCol > 1) {
 		// weight matrix is duplicated among subArray

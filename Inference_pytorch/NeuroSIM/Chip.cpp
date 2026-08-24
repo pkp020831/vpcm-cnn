@@ -585,7 +585,7 @@ vector<double> ChipCalculateArea(InputParameter& inputParameter, Technology& tec
 }
 
 
-double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech, MemCell& cell, int layerNumber, const string &newweightfile, const string &oldweightfile, const string &inputfile, bool followedByMaxPool, 
+double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech, MemCell& cell, int layerNumber, const string &newweightfile, const string &oldweightfile, const string &inputfile, bool followedByMaxPool,
 							const vector<vector<double> > &netStructure, const vector<int> &markNM, const vector<vector<double> > &numTileEachLayer, const vector<vector<double> > &utilizationEachLayer, 
 							const vector<vector<double> > &speedUpEachLayer, const vector<vector<double> > &tileLocaEachLayer, double numPENM, double desiredPESizeNM, double desiredTileSizeCM, 
 							double desiredPESizeCM, double CMTileheight, double CMTilewidth, double NMTileheight, double NMTilewidth,
@@ -630,7 +630,11 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 	*Global_buf_leakage=0;
 	double tileLeakage = 0;
 	
-	int numInVector = (netStructure[l][0]-netStructure[l][3]+1)/netStructure[l][7]*(netStructure[l][1]-netStructure[l][4]+1)/netStructure[l][7];
+	double paddingHeight = netStructure[l].size() > 9 ? netStructure[l][9] : 0;
+	double paddingWidth = netStructure[l].size() > 10 ? netStructure[l][10] : 0;
+	int outputHeight = floor((netStructure[l][0] + 2*paddingHeight - netStructure[l][3])/netStructure[l][7]) + 1;
+	int outputWidth = floor((netStructure[l][1] + 2*paddingWidth - netStructure[l][4])/netStructure[l][7]) + 1;
+	int numInVector = outputHeight * outputWidth;
 	int totalNumTile = 0;
 	for (int i=0; i<netStructure.size(); i++) {
 		totalNumTile += numTileEachLayer[0][i] * numTileEachLayer[1][i];
@@ -779,7 +783,7 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 									(int) netStructure[l][5]*numColPerSynapse/numtileEachLayerCol, numPENM, (int) netStructure[l][2]*numRowPerSynapse);
 
 				vector<vector<double> > tileInput;
-				tileInput = ReshapeInput(inputVector, i*desiredPESizeNM, (int) (netStructure[l][0]-netStructure[l][3]+1)*(netStructure[l][1]-netStructure[l][4]+1)*param->numBitInput, 
+				tileInput = ReshapeInput(inputVector, i*desiredPESizeNM, numInVector*param->numBitInput,
 									(int) netStructure[l][2]*numRowPerSynapse/numtileEachLayerRow, numPENM, (int) netStructure[l][2]*numRowPerSynapse);
 	
 				

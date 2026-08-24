@@ -24,6 +24,8 @@ class LayerRecord:
     pool_after: int
     stride: int
     is_fc: int
+    padding_height: int
+    padding_width: int
 
     def csv_row(self) -> tuple[int, ...]:
         return (
@@ -36,6 +38,8 @@ class LayerRecord:
             self.pool_after,
             self.stride,
             self.is_fc,
+            self.padding_height,
+            self.padding_width,
         )
 
 
@@ -106,6 +110,7 @@ def create_layer_artifacts(
             _, channels, height, width = inputs.shape
             kernel_height, kernel_width = module.kernel_size
             stride = int(module.stride[0])
+            padding_height, padding_width = module.padding
             record = LayerRecord(
                 name,
                 int(height),
@@ -117,6 +122,8 @@ def create_layer_artifacts(
                 pooling[module],
                 stride,
                 0,
+                int(padding_height),
+                int(padding_width),
             )
             unfolded = functional.unfold(
                 inputs,
@@ -138,6 +145,8 @@ def create_layer_artifacts(
                 0,
                 1,
                 1,
+                0,
+                0,
             )
             activation_matrix = _to_bit_matrix(inputs.T, activation_bits)
         else:

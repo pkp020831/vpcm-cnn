@@ -343,8 +343,8 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 	int numRowPerSynapse, numColPerSynapse;
 	numRowPerSynapse = param->numRowPerSynapse;
 	numColPerSynapse = param->numColPerSynapse;
-	double PEreadLatency, PEreadDynamicEnergy, PEleakage, PEbufferLatency, PEbufferDynamicEnergy, PEicLatency, PEicDynamicEnergy;
-	double peLatencyADC, peLatencyAccum, peLatencyOther, peEnergyADC, peEnergyAccum, peEnergyOther;
+	double PEreadLatency = 0, PEreadDynamicEnergy = 0, PEleakage = 0, PEbufferLatency = 0, PEbufferDynamicEnergy = 0, PEicLatency = 0, PEicDynamicEnergy = 0;
+	double peLatencyADC = 0, peLatencyAccum = 0, peLatencyOther = 0, peEnergyADC = 0, peEnergyAccum = 0, peEnergyOther = 0;
 	int numSubArrayRow = ceil((double)peSize/(double)param->numRowSubArray);
 	int numSubArrayCol = ceil((double)peSize/(double)param->numColSubArray);
 	

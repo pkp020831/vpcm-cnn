@@ -47,6 +47,7 @@
 #include <sstream>
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 #include "constant.h"
 #include "formula.h"
 #include "Param.h"
@@ -68,13 +69,18 @@ int main(int argc, char * argv[]) {
 	
 	vector<vector<double> > netStructure;
 	netStructure = getNetStructure(argv[1]);
-	string model = argv[argc-5];
-	param->numRowSubArray = atoi(argv[argc-4]);
-	param->numColSubArray = atoi(argv[argc-3]);
-	param->search_pe = atoi(argv[argc-2]);
-	param->search_tile = atoi(argv[argc-1]);
-	param->levelOutput = pow(2, (atoi(argv[argc - 7])));
-    param->cellBit = atoi(argv[argc - 6]); 
+	// Legacy callers omit numColMuxed; newer callers append it after Tile.
+	int trailingArguments = isdigit(argv[argc-6][0]) ? 5 : 6;
+	string model = argv[argc-trailingArguments];
+	param->numRowSubArray = atoi(argv[argc-trailingArguments+1]);
+	param->numColSubArray = atoi(argv[argc-trailingArguments+2]);
+	param->search_pe = atoi(argv[argc-trailingArguments+3]);
+	param->search_tile = atoi(argv[argc-trailingArguments+4]);
+	if (trailingArguments == 6) {
+		param->numColMuxed = atoi(argv[argc-1]);
+	}
+	param->levelOutput = pow(2, (atoi(argv[argc-trailingArguments-2])));
+    param->cellBit = atoi(argv[argc-trailingArguments-1]);
 	// define weight/input/memory precision from wrapper
 	param->synapseBit = atoi(argv[2]);              // precision of synapse weight
 	param->numBitInput = atoi(argv[3]);             // precision of input neural activation
@@ -220,7 +226,7 @@ int main(int argc, char * argv[]) {
 	cout << "----------------- # of tile used for each layer -----------------" <<  endl;
 	double totalNumTile = 0;
 	ofstream fout;
-	string fout_name = "shape_" + model +"_ADC:" + argv[argc - 7] + "_Cellbit:" + argv[argc - 6] +"_SA_row:" + to_string(param->numRowSubArray) + "_SA_col:" + to_string(param->numColSubArray) + "_PE:" + to_string(param->search_pe) + "_TL:" + to_string(param->search_tile);
+	string fout_name = "shape_" + model +"_ADC:" + argv[argc-trailingArguments-2] + "_Cellbit:" + argv[argc-trailingArguments-1] +"_SA_row:" + to_string(param->numRowSubArray) + "_SA_col:" + to_string(param->numColSubArray) + "_PE:" + to_string(param->search_pe) + "_TL:" + to_string(param->search_tile);
 	fout.open(fout_name);
 	for (int i=0; i<netStructure.size(); i++) {
 		// if(utilization_index[i]==0){
@@ -232,6 +238,24 @@ int main(int argc, char * argv[]) {
 		// 	cout << "layer" << i+1 << ": " << numTileEachLayer_little[0][i] * numTileEachLayer_little[1][i] << endl;
 		// 	totalNumTile += numTileEachLayer_little[0][i] * numTileEachLayer_little[1][i];
 		// }
+	}
+	const char *floorplanPath = getenv("NAVCIM_NEUROSIM_FLOORPLAN");
+	if (floorplanPath != NULL && floorplanPath[0] != '\0') {
+		ofstream floorplan(floorplanPath);
+		if (!floorplan.is_open()) {
+			cerr << "ERROR: cannot write NeuroSim floorplan: " << floorplanPath << endl;
+			return 1;
+		}
+		floorplan << "layer,tile_rows,tile_cols,tile_count,start_tile,mesh_rows,mesh_cols\n";
+		int startTile = 0;
+		for (int i = 0; i < netStructure.size(); i++) {
+			int tileRows = (int)numTileEachLayer[0][i];
+			int tileCols = (int)numTileEachLayer[1][i];
+			int tileCount = tileRows * tileCols;
+			floorplan << i << ',' << tileRows << ',' << tileCols << ',' << tileCount
+				<< ',' << startTile << ',' << numTileRow << ',' << numTileCol << '\n';
+			startTile += tileCount;
+		}
 	}
 	cout << endl;
 
@@ -267,7 +291,11 @@ int main(int argc, char * argv[]) {
 	
 	double numComputation = 0;
 	for (int i=0; i<netStructure.size(); i++) {
-		numComputation += 2*(netStructure[i][0] * netStructure[i][1] * netStructure[i][2] * netStructure[i][3] * netStructure[i][4] * netStructure[i][5]);
+		double paddingHeight = netStructure[i].size() > 9 ? netStructure[i][9] : 0;
+		double paddingWidth = netStructure[i].size() > 10 ? netStructure[i][10] : 0;
+		double outputHeight = floor((netStructure[i][0] + 2*paddingHeight - netStructure[i][3])/netStructure[i][7]) + 1;
+		double outputWidth = floor((netStructure[i][1] + 2*paddingWidth - netStructure[i][4])/netStructure[i][7]) + 1;
+		numComputation += 2*(outputHeight * outputWidth * netStructure[i][2] * netStructure[i][3] * netStructure[i][4] * netStructure[i][5]);
 	}
 
 	ChipInitialize(inputParameter, tech, cell, netStructure, markNM, numTileEachLayer,
@@ -652,6 +680,7 @@ int main(int argc, char * argv[]) {
 	cout << "Tileheight : " << CMTileheight << "m" << endl;
 	cout << "minDist" << minDist << "m" <<endl;
 	cout << "busWidth" << busWidth <<endl;
+	cout << "NoC unitLatencyRep: " << unitLatencyRep << " unitLatencyWire: " << unitLatencyWire << endl;
 	cout << "Chip total CIM array : " << chipAreaArray*1e12 << "um^2" << endl;
 	cout << "Total IC Area on chip (Global and Tile/PE local): " << chipAreaIC*1e12 << "um^2" << endl;
 	cout << "Total ADC (or S/As and precharger for SRAM) Area on chip : " << chipAreaADC*1e12 << "um^2" << endl;

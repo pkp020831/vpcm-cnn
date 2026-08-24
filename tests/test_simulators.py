@@ -1,4 +1,4 @@
-from navcim_m4.simulators import parse_booksim_output, parse_neurosim_output
+from navcim_m4.simulators import BOOKSIM_FLIT_BITS, parse_booksim_output, parse_neurosim_noc_config, parse_neurosim_output
 
 
 def test_parse_neurosim_output():
@@ -27,3 +27,21 @@ Time taken is 120 cycles
     assert result.total_power_w == 0.5
     assert result.area_m2 == 0.25
     assert result.leakage_power_w == 0.01
+
+
+def test_parse_neurosim_noc_config():
+    output = """
+Tilewidth : 0.0002m
+minDist0.00001m
+busWidth256
+NoC unitLatencyRep: 2e-10 unitLatencyWire: 1e-10
+Chip clock period is: 2ns
+"""
+    result = parse_neurosim_noc_config(output)
+    assert result.bus_width_bits == 256
+    assert result.clock_hz == 5e8
+    assert result.link_latency_cycles == 1
+
+
+def test_booksim_flit_width_matches_legacy_navcim_baseline():
+    assert BOOKSIM_FLIT_BITS == 128

@@ -38,6 +38,15 @@ python -m navcim_m4 doctor
 
 ## Run
 
+For independently runnable and measurable input/output stages, including the
+ordered flowchart and manifest contracts, see [`PIPELINE.md`](PIPELINE.md).
+The complete M4 location map is in [`M4_STRUCTURE.md`](M4_STRUCTURE.md), and the
+isolated BookSim prediction stages are in [`BOOKSIM_PIPELINE.md`](BOOKSIM_PIPELINE.md).
+The independently restartable NeuroSim stages are documented in
+[`NEUROSIM_PIPELINE.md`](NEUROSIM_PIPELINE.md).
+The paired NeuroSim+BookSim training and stacked PPA flow is documented in
+[`META_PIPELINE.md`](META_PIPELINE.md).
+
 Build the simulators:
 
 ```bash
@@ -142,12 +151,27 @@ python -m navcim_m4 run --checkpoint outputs/checkpoints/vgg11-cifar10.pt \
   --crosssim --crosssim-samples 100 --crosssim-runs 3
 ```
 
+Predictor searches use a full-candidate TOPSIS validation pool of 100 by
+default; override `--validation-top-k` only with a recorded justification.
+
 The cache key includes the checkpoint SHA-256, sample count, run count, and
 CrossSim configuration. CPU analog simulation is substantially slower than
 digital inference, especially with noise or parasitic resistance; use the
 100-image cache for search and re-run selected Pareto candidates with 10,000
 samples. Set all precision/noise/resistance effects to their ideal values for
 the numerical digital-versus-CrossSim equivalence check.
+
+Run the prescribed 42-condition screening sweep on 100 test images in batches
+of 100. It uses ADC bits 4/5/8, 7-bit-cell/1-slice and 1-bit-cell/7-slice
+weight mappings, then independently sweeps programming error and read noise
+at 0.01/0.03 and wire resistance at 0.25/1.0 ohm. Non-ideal conditions use
+three seeds; ideal conditions use one.
+
+```bash
+python -m navcim_m4 crosssim-sweep \
+  --checkpoint outputs/checkpoints/vgg11-cifar10.pt \
+  --output outputs/crosssim-sweep
+```
 
 ## Legacy source
 

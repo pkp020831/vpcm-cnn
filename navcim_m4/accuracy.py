@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 import sys
 import time
@@ -33,6 +34,7 @@ class CrossSimConfig:
     input_slice_size: int = 1
     programming_error: float = 0.0
     read_noise: float = 0.0
+    lumped_read_noise: bool = False
     drift_time: float = 0.0
     wire_resistance: float = 0.0
     seed: int = 117
@@ -205,6 +207,7 @@ def _crosssim_model(model: VGG11Cifar10, config: CrossSimConfig, input_bound: fl
             adc_range=[-bound, bound], useGPU=False, digital_bias=True,
             error_model="generic" if config.programming_error else "none", alpha_error=config.programming_error,
             noise_model="generic" if config.read_noise else "none", alpha_noise=config.read_noise,
+            lumped_read_noise=config.lumped_read_noise,
             drift_model="none", t_drift=0,
             Rp_row=config.wire_resistance, Rp_col=config.wire_resistance,
         ))
@@ -257,10 +260,52 @@ def evaluate_crosssim(checkpoint: Path, data_dir: Path, samples: int, batch_size
 
 
 def cached_crosssim(checkpoint: Path, data_dir: Path, samples: int, batch_size: int, runs: int, config: CrossSimConfig, cache_dir: Path) -> dict[str, Any]:
-    key = hashlib.sha256(json.dumps({"checkpoint": checkpoint_sha256(checkpoint), "samples": samples, "runs": runs, "config": asdict(config)}, sort_keys=True).encode()).hexdigest()
+    dataset_artifact = data_dir.resolve() / "cifar-10-batches-py" / "test_batch"
+    dataset_identity = {
+        "path": str(data_dir.resolve()),
+        "test_batch_sha256": checkpoint_sha256(dataset_artifact) if dataset_artifact.is_file() else None,
+    }
+    key = hashlib.sha256(json.dumps({
+        "checkpoint": checkpoint_sha256(checkpoint),
+        "dataset": dataset_identity,
+        "samples": samples,
+        "batch_size": batch_size,
+        "runs": runs,
+        "config": asdict(config),
+    }, sort_keys=True).encode()).hexdigest()
     cached = cache_dir / f"{key}.json"
     if cached.is_file():
         return json.loads(cached.read_text(encoding="utf-8"))
-    report = evaluate_crosssim(checkpoint, data_dir, samples, batch_size, runs, config, cache_dir)
-    cached.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    work_dir = cache_dir / f"{key}.work-{os.getpid()}"
+    report = evaluate_crosssim(checkpoint, data_dir, samples, batch_size, runs, config, work_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    temporary = cache_dir / f".{key}.{os.getpid()}.tmp"
+    temporary.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    os.replace(temporary, cached)
     return report
+
+
+def prescribed_sweep_conditions(seed: int = 117) -> list[tuple[str, CrossSimConfig, int]]:
+    conditions: list[tuple[str, CrossSimConfig, int]] = []
+    for adc_bits in (4, 5, 8):
+        for cell_bits, weight_slices in ((7, 1), (1, 7)):
+            base = CrossSimConfig(adc_bits=adc_bits, cell_bits=cell_bits, weight_slices=weight_slices, seed=seed)
+            label = f"adc{adc_bits}_cell{cell_bits}_slices{weight_slices}"
+            conditions.append((f"{label}_ideal", base, 1))
+            for field, levels in (("programming_error", (0.01, 0.03)), ("read_noise", (0.01, 0.03)), ("wire_resistance", (0.25, 1.0))):
+                for level in levels:
+                    conditions.append((f"{label}_{field}{level}", CrossSimConfig(**(asdict(base) | {field: level})), 3))
+    return conditions
+
+
+def run_prescribed_sweep(checkpoint: Path, data_dir: Path, output_dir: Path, samples: int = 100, batch_size: int = 100, seed: int = 117) -> dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    conditions = prescribed_sweep_conditions(seed)
+    results = []
+    for index, (label, config, runs) in enumerate(conditions, start=1):
+        report = cached_crosssim(checkpoint, data_dir, samples, batch_size, runs, config, output_dir / "cache")
+        results.append({"label": label, **report})
+        print(json.dumps({"completed": index, "total": len(conditions), "label": label, "crosssim_accuracy_mean": report["crosssim_accuracy_mean"], "accuracy_drop_percentage_points": report["accuracy_drop_percentage_points"]}, sort_keys=True), flush=True)
+    summary = {"checkpoint_sha256": checkpoint_sha256(checkpoint), "samples": samples, "batch_size": batch_size, "conditions": results}
+    (output_dir / "sweep_results.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    return summary

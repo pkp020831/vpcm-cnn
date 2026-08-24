@@ -3,7 +3,7 @@ import sys
 import pytest
 import torch
 
-from navcim_m4.accuracy import CrossSimConfig, _crosssim_model
+from navcim_m4.accuracy import CrossSimConfig, _crosssim_model, prescribed_sweep_conditions
 from navcim_m4.models import create_model, sample_input
 
 
@@ -19,3 +19,11 @@ def test_crosssim_ideal_cpu_matches_torch():
         difference = (model(sample_input()) - analog(sample_input())).abs().max().item()
     assert difference < 1e-5
     assert "cupy" not in sys.modules
+
+
+def test_prescribed_sweep_has_six_baselines_and_42_conditions():
+    conditions = prescribed_sweep_conditions()
+    assert len(conditions) == 42
+    assert sum(runs == 1 for _, _, runs in conditions) == 6
+    assert {config.adc_bits for _, config, _ in conditions} == {4, 5, 8}
+    assert {(config.cell_bits, config.weight_slices) for _, config, _ in conditions} == {(7, 1), (1, 7)}
